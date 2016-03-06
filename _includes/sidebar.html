@@ -1,0 +1,70 @@
+<div class="sidebar">
+  <div class="container sidebar-sticky">
+
+   <div class="sidebar-about">
+
+     <h1>
+        <a href="/">
+          {{ site.title }}
+        </a>
+      </h1>
+      <p class="lead">{{ site.description }}</p>
+
+    <div style="display: inline-flex;">
+      <a href="https://www.linkedin.com/in/brunodanielmarinho" target="_blank">
+      	<img src="/images/linkedin.png" height="62" width="62">
+      </a>
+ 	<a href="https://twitter.com/marinhodev" target="_blank">
+     	 <img src="/images/twitter.png" height="62" width="62">
+      </a>
+	<a href="https://github.com/bdmstyle" style="margin-top: -7px" target="_blank">
+     	 <img src="/images/github.svg" height="80" width="80">
+      </a>
+  	&nbsp;
+	<a href="/atom.xml" style="padding-top: 8px;" target="_blank">
+      	<img src="/images/rss.png" height="48" width="48">
+      </a>
+
+    
+    </div>
+ 
+   </div>
+
+    <nav class="sidebar-nav">
+      <a class="sidebar-nav-item{% if page.url == site.baseurl %} active{% endif %}" href="/">Home</a>
+
+      {% comment %}
+        The code below dynamically generates a sidebar nav of pages with
+        `layout: page` in the front-matter. See readme for usage.
+      {% endcomment %}
+
+      {% assign pages_list = site.pages %}
+      {% for node in pages_list %}
+        {% if node.title != null %}
+          {% if node.layout == "page" %}
+            <a class="sidebar-nav-item{% if page.url == node.url %} active{% endif %}" href="{{ node.url }}">{{ node.title }}</a>
+          {% endif %}
+        {% endif %}
+      {% endfor %}
+
+    <a class="sidebar-nav-item" href="{{ site.github.repo }}">Curriculum Download</a>
+
+<h1 style="color: #fff;">Tag Cloud</h1>
+{% assign tags = site.tags | sort %}
+{% for tag in tags %}
+{% if tag contains 'projects' or tag contains 'disabled' %}
+{% else %}
+ <span class="site-tag">
+    <a href="/{{ tag | first | slugify }}/"
+        style="font-size: {{ tag | last | size  |  times: 4 | plus: 80  }}%">
+            {{ tag[0] | replace:'-', ' ' }} ({{ tag | last | size }})
+    </a>
+</span>
+{% endif %}
+{% endfor %}
+    </nav>
+
+
+    <p>&copy; {{ site.time | date: '%Y' }}. All rights reserved.</p>
+  </div>
+</div>

@@ -1,0 +1,42 @@
+---
+layout: post
+title: Arquitetura para Testes Funcionais mais Orientado a Objeto [Selenium 2]
+date: 2012-02-06 11:08:09.000000000 -02:00
+type: post
+published: true
+status: publish
+tags: [projects]
+---
+<div>
+<p>Depois de algum tempo trabalhando com testes no sentido de fazer uma historia, automatizar os teste unitários depois automatizar os teste funcionais da historia, vi que existe varias formas de como escrever testes funcionais, me deparei muitas vezes com códigos  existentes que eu não fazia ideia do que acontecia... de classes e padrões confusos. Conversei com algumas pessoas tentei entender o que não deu certo e o que deu.</p>
+</div>
+<div>
+<p>A conclusão que cheguei é simples, o código em geral são códigos feios de se ler , muito código duplicado, por ser "simplesmente um teste burro" não havia muita divisão de responsabilidades,  logica funcional misturado com comandos do selenium explícitos. Vi algumas implementações do padrão Page Object que realmente não me agradaram, o mais e legal foi que tentar trocar de selenium 1 para o 2 era quase impossível por que não havia sido encapsulado os comandos do selenium em algum lugar comun.</p>
+</div>
+<div>
+<p>Então comecei a pensar em alguma forma de fazer testes orientado a objetos, mais inteligentes com responsabilidade e  que fossem faceis de ler, e qualquer QA possa escrever os testes. Pensei em algo motivado por blogs na internet e pessoas com quem conversei no trabalho, desenvolvi algumas abstrações e gostei do resultado em um projeto pessoal que estou fazendo.</p>
+</div>
+<div></div>
+<div>
+<p>Gravei um vídeo com um exemplo para demostrar é só uma ideia inicial.</p>
+<p>http://www.youtube.com/watch?v=RgxZy_PLztQ&amp;feature=youtu.be</p>
+</div>
+<div></div>
+<div>
+<p>Disponibilizarei o link com o código do projeto.</p>
+</div>
+<div>
+<p><a title="http://j-help-in-reading.googlecode.com/files/projetoDelicious.zip " href="http://j-help-in-reading.googlecode.com/files/projetoDelicious.zip" target="_blank">http://j-help-in-reading.googlecode.com/files/projetoDelicious.zip </a></p>
+</div>
+<div>
+<p>1 - Será necessário baixar o selenium 2 e colocar os jar no classpath fiz assim pq é meio grande os jars.</p>
+</div>
+<div>
+<p><a title="http://seleniumhq.org/download/" href="http://seleniumhq.org/download/" target="_blank">http://seleniumhq.org/download/</a></p>
+</div>
+<div>
+<p>2 - Baixar o chrome driver e colocar o path dele na classe ChromeTestCase no metodo createAndStartService()</p>
+</div>
+<div>
+<p><a title="http://code.google.com/p/chromedriver/downloads/list" href="http://code.google.com/p/chromedriver/downloads/list">http://code.google.com/p/chromedriver/downloads/list</a></p>
+</div>

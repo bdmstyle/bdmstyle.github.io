@@ -1,0 +1,15 @@
+---
+layout: post
+title: Como rodar testes especificos no maven linha de comando
+date: 2014-04-17 20:18:22.000000000 -03:00
+type: post
+published: true
+status: publish
+tags: [java]
+---
+<p>Ola hoje vou deixar uma dica rápida, se você roda seus projetos com maven na linha de comando, para testar um teste especifico rode.</p>
+<p>Classe se chama Pagamento</p>
+<p>mvn '-Dtest=br.com.uol.upbc.it.be.P*' test<br />vai rodar todos os testes  da classe Pagamento</p>
+<p>mvn '-Dtest=br.com.uol.upbc.it.be.Pagamento#metodo*' test</p>
+<p>vai rodar apenas o método especificado.</p>
+<p> </p>

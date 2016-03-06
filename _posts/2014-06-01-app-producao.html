@@ -1,0 +1,131 @@
+---
+layout: post
+title: Colocando em produção uma App (Nginx + Servlet 3 + Maven + Jetty)
+date: 2014-06-01 18:39:42.000000000 -03:00
+type: post
+published: true
+status: publish
+tags: [devops]
+---
+<p>Olá pessoal vou começar uma serie de 2 posts, falando como colocar uma aplicação em produção em algum servidor como amazon aws,vamos abordar servlet 3, maven como instalar o jetty e o ngnix, tudo sem ajuda de IDEs.</p>
+<p>Nessa primeira parte vamos fazer uma aplicação local com Servlets 3 que eu particularmente gosto bastante pela simplicidade.</p>
+<p>*Maven<br />
+O maven gerencia para nós as dependências do projeto isso é, tudo que nos necessitamos devemos pedir ao maven que ele vai na internet e busca pra gente, ou seja esqueça ficar procurando jars na internet para colocar em seus projetos.</p>
+<p>1 - Instalação do maven<br />
+Para instalar então primeiramente você deve ter o java instalado "java -version" tem funcionar, em seguida vamos fazer a instalação do maven baixe a ultima versão de http://maven.apache.org/download.cgi. Vamos descompactar o arquivo em /opt  exporte a variável de ambiente  com o comando "export M2_HOME=/opt/apache-maven-3.2.1", então o comando "mvn -version" deve funcionar.</p>
+<p>2 - Criando projeto<br />
+A criação é bem simples pedimos ao maven criar um projeto usando o template "maven-archetype-webapp" e damos o nome "sample" e falamos que ele é do grupo "com.sample" com o comando abaixo e isso cria nosso java web.</p>
+<p>[sourcecode language="java" title="comando maven para gerar  projeto"]<br />
+mvn archetype:generate -DgroupId=com.sample -DartifactId=sample<br />
+ -DarchetypeArtifactId=maven-archetype-webapp -DinteractiveMode=false<br />
+[/sourcecode]</p>
+<p>3 - Configurando o jetty embedded</p>
+<p>Com o maven gerenciando as dependências do nosso projeto tudo que nos necessitamos é pedir para ele, no caso eu quero um servidor web jetty e usar servlet 3,para isso eu declaro o plugin do jetty e a dependência do javaee7 que é nescessario para o servlet3(para quem não sabe o jee é um jar com as especificações de servlet no caso) no arquivo pom.xml que é onde o maven é configurado.</p>
+<p>com o arquivo ficando como o abaixo:</p>
+
+{% gist bdmstyle/43bf3a6681d2551155488b46f6cf7543 %}
+
+<p>Se tudo esta certo agora você pode rodar.. o comando "mvn clean install" na raiz do projeto(onde fica o pom.xml) e devera ocorrer "BUILD SUCCESS", legal ja temos o jetty e o jaee7 com muito pouco esforço.</p>
+<p>4 - Criando nosso Servlet 3</p>
+<p>Servlet 3 é muito simples e fácil não temos que ter web.xml ou mapeamentos para que conhece as versões mais antigas da especificação servlet.<br />
+4.1 - vamos entrar no projeto ate a pasta main sample/src/main/ que o maven criou para nós então criamos uma pasta chamada java onde ficara nossas classes.<br />
+4.2 - Depois criamos uma pasta chamada mypackage que sera nosso pacote java(isso é estrutura de diretórios que o ide cria para nós geralmente um pacote java não é nada mais apenas uma pasta)<br />
+4.3 - Em seguida criamos nosso servlet que se chama IndexController, muito simples nos apenas dizemos @WebServlet("/index") ou seja que esse servlet responde quando se digita /index na url e colocamos um hello World nos metodos doGet e doPost.</p>
+<p>[sourcecode language="java"]</p>
+<p>package mypackage;<br />
+import java.io.*;<br />
+import javax.servlet.*;<br />
+import javax.servlet.annotation.*;<br />
+import javax.servlet.http.*;</p>
+<p>@WebServlet(&quot;/index&quot;)<br />
+public class IndexController extends HttpServlet {</p>
+<p>	@Override<br />
+	protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {<br />
+    response.getWriter().write(&quot;[GET] Hello Word &quot;+request.getParameter(&quot;name&quot;));<br />
+  }</p>
+<p>  @Override<br />
+  protected void doPost(HttpServletRequest request, HttpServletResponse response)	throws ServletException, IOException {<br />
+    response.getWriter().write(&quot;[POST] Hello Word &quot;+request.getParameter(&quot;name&quot;));<br />
+	}</p>
+<p>}<br />
+[/sourcecode]</p>
+<p>Rodando o projeto com o comando "mvn clean install jetty:run", e acessando http://localhost:8080/index?name=Bruno nós recebemos como resposta</p>
+<p>[GET] Hello Word Bruno</p>
+<p>Simples não? sem Eclipse, Netbeans sem colocar jar na mão, sem web.xml, sem baixar servidor web, gosto bastante de Servlet pois é muito leve e rápido, para coisas simples e pequenas.</p>
+<p>Claro fazer essa pequena aplicação usando um ide é mais rápido ainda,todos os ides tem um plugin ou algum suporte para maven, o que deixa as coisas bem produtivas.</p>
+<p>Note que dentro da pasta target nos temos o arquivo sample1.war que é o arquivo que colocarmos no servidor de aplicação para  publicar o aplicativo, no próximo post iremos colocar em produção essa aplicação usando o servidor nginx e instalando um jetty de verdade para fazer a publicação(deploy).</p>
+<p>Fonte do exemplo no github https://github.com/bdmstyle/servlet3sample/tree/master</p>
+
+
+<p>Nessa segunda parte vamos aprender como configurar um domínio e fazer o Nginx servir um site estático como um blog e como deployar nosso aplicação java sample1.war que fizemos no post passado , usando o jetty como servidor de aplicação.</p>
+<p>Primeira parte - http://brunodanielmarinho.wordpress.com/2014/06/01/servlet-3-maven-jetty-sem-ide-em-5-minutos-colocando-em-producao-1/</p>
+<p>1 - Configurando o domínio</p>
+<p>Você  deve ter algum domínio que é nome na internet, existem muitos sites para comprar um dominio como o www.onlydomains.com/ que cobra 8,99 dólares por ano em um dominio ".com" por exemplo,depois que você escolher o nome e pagar é claro por exemplo  bruno123.com , você acessa a área onde se configura o domínio no site,geralmente "DNS manager ou gerenciar DNS" alguma parecida com isso.</p>
+<p>Vai ter uma telinha com algo assim.</p>
+<p>www | A  | 192.168.0.1<br />
+@   | NS |ns1.bruno123.com</p>
+<p>Isso serve para você configurar um domínio ou subdominio por exemplo coisas.bruno123.com,blog.bruno123.com ou mesmo o site principal www.bruno123.com,funciona assim o cara digita o domínio e é redirecionado para o ip configurado que vai ser o do seu servidor. Você deve usar sempre a configuração do tipo "A" ficaria assim.</p>
+<p>www    | A  | 192.168.0.1<br />
+blog   | A  | 192.168.0.1<br />
+coisas | A  | 192.168.0.1</p>
+<p>2 - Sobre o servidor do seu site</p>
+<p>Obviamente deve-se ter um servidor, você pode conseguir um na amazon elastic cloud, colocando seu cartão de credito internacional la você ganha 1 ano grátis para testar uma maquina pequena mais do que suficiente para qualquer projeto pessoal ou de teste.<br />
+Subir um servidor esta fora do escopo desse post vamos assumir que você tem uma maquina com ubuntu em algum cloud.<br />
+Você deve ter o ip publico do servidor que é facilmente localizado nos clouds e configurar o DNS para apontar para esse ip.</p>
+<p>Para começar vamos a um exemplo simples de como servir um site estático por exemplo um arquivo chamado index.html.</p>
+<p>Faça ssh no servidor, veja se não tem nenhum apache rodando por acaso rodando "ps -ef | grep" apache se tiver desligue o apache, "sudo service apache2 stop".</p>
+<p>3 - Instalando NGINX<br />
+O nginx é um servidor http é ele que recebe a requisição e responde elas, vamos instalar "sudo apt-get install nginx", e temos o servidor instalado, com isso rodamos "sudo service nginx start", e deve subir sem erros, digitando o seu ip publico no navegador você já deve poder ver a pagina inicial do nginx</p>
+<p>4 - Configurando um site estático.<br />
+Bom vamos colocar o nginx para servir um site simples que só tem uma pagina chamada index.html colocaremos esse arquivo em /home/site/index.html com qualquer conteúdo por exemplo "hello world", crie um arquivo em /etc/nginx/sites-available/ um arquivo chamado site com o seguinte conteúdo.</p>
+<p>[sourcecode language="javascript" title="arquivo site"]<br />
+server {<br />
+        listen *:80;<br />
+        server_name blog.bruno123.com;<br />
+        index index.html;<br />
+        root /home/site;</p>
+<p>        error_log  /var/log/nginx/site-error.log  warn;<br />
+        access_log /var/log/nginx/site-access.log;<br />
+}<br />
+[/sourcecode]</p>
+<p>vamos reiniciar o servidor "sudo service nginx restart"</p>
+<p>O arquivo é auto descritivo, ele pega todas as requisições que vem de blog.bruno123.com que você configurou la em cima no DNS para apontar para seu servidor, procura um arquivo index.html dentro do diretório /home/blog/, e mostra a o site além de configurar os logs.</p>
+<p>o ultimo passo é que você tem fazer um link simbólico em /etc/nginx/sites-enabled apontando para o arquivo de configuração em /etc/nginx/sites-available/site para voce poder habilitar o site.<br />
+Por exemplo estando no diretório "sites-enabled"  faça "sudo ln -s /etc/nginx/sites-available/blog blog" para criar o link simbólico.</p>
+<p>Depois disso se você acessar blog.bruno123.com deve aparecer o arquivo index.html com sucesso.</p>
+<p>5 - Fazendo redirecionamentos<br />
+Caso você queria pode fazer um redirecionamento usando NGINX por exemplo eu gostaria de quando digitar google.bruno123.com eu fosse redirecionado para o google.com. Então para isso eu devo criar uma nova entrada no DNS de google.bruno123.com apontando para o seu ippublic e criar um arquivo novo em "sites-available" chamado google com o seguinte conteúdo:</p>
+<p>[sourcecode language="javascript" title="arquivo google"]<br />
+server {<br />
+        server_name  google.bruno123.com;<br />
+        rewrite ^(.*) http://www.google.com$1 permanent;<br />
+}<br />
+[/sourcecode]</p>
+<p>por fim criar o link simbólico em sites-enabled novamente e restartar o server "sudo service nginx restart"</p>
+<p>Novamente o NGINX vai pegar as requisições de google.bruno123.com que voce configurou no DNS la em cima para o ip do seu servidor e vai redirecionar para o google, bem simples não?</p>
+<p>6 - Servindo uma aplicação java, Instalando o Jetty.</p>
+<p>Certo mas queremos colocar nossa aplicação sample1.war no ar como fazer? primeiro você deve baixar o jetty servidor de aplicação para servlet , no site dele http://www.eclipse.org/jetty/downloads.php em seguida descompactar em /opt , "cd /opt" e depois "unzip jetty.zip".</p>
+<p>Agora temos que copiar o script de inicialização do nginx para a pasta do linux<br />
+"sudo cp /opt/jetty/bin/jetty.sh /etc/init.d/jetty"</p>
+<p>Temos que exportar a variavel "export JETTY_HOME="/opt/jetty" e você pode colocar em /etc/environment para ficar permanente.</p>
+<p>Agora podemos fazer sudo /etc/init.d/jetty start e temos um servidor web java rodando.<br />
+Para realizar a publicação(deploy)</p>
+<p>6.1 vamos pegar o sample1.war nossa aplicação do post anterior e copiar ela para o servidor via SCP.<br />
+6.2 renomear de sample1.war para sample.war e copiar ele na pasta de deploy do jetty /opt/jetty/webapps.</p>
+<p>Tivemos que renomear o arquivo pois o jetty sobre o contexto da aplicação com o nome do arquivo, por exemplo como o arquivo chama sample.war nesse caso vai ficar ip:porta/sample/index, agora /etc/init.d/jetty restart isso vai deployar nossa app no jetty que por padrão usa a porta 8080;</p>
+<p>Vamos criar um novo arquivo em sites-available chamado site java com o conteúdo abaixo e seu respectivo link simbólico em sites-enabled e depois "sudo service nginx restart"</p>
+<p>[sourcecode language="javascript" title="arquivo sitejava"]<br />
+server {<br />
+        listen *:80;<br />
+        server_name sitejava.bruno123.com;<br />
+        error_log  /var/log/nginx/bruno123-error.log  warn;<br />
+        access_log /var/log/nginx/bruno123-access.log;</p>
+<p>        location /{<br />
+          proxy_pass http://127.0.0.1:8080/sample/;<br />
+          proxy_redirect off;<br />
+        }<br />
+}</p>
+<p>[/sourcecode]</p>
+<p>Bom agora tudo que vier de sitejava.bruno123.com vai ser passado para o jetty em localhost:8080/sample/ com seus parâmetros no caso index, fazendo o PROXY. Efetuando essa configuração em nosso exemplo funciona GET e POST e tudo mais,ou seja podemos fazer hhtp://sitejava.bruno123.com/index?name=bruno e recebemos,<br />
+[GET] Hello Word bruno so que agora em produção!!! e não local.</p>
+<p>Bom finalizando, só quero dizer que essa não é a melhor forma de fazer mais funciona até a próxima.</p>

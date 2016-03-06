@@ -1,0 +1,80 @@
+---
+layout: post
+title: Internacionalizacao com velocity
+date: 2012-11-28 02:11:01.000000000 -02:00
+type: post
+published: true
+status: publish
+tags: [webapps]
+---
+<p>Ola pessoal vou mostrar como obter o mesmo praticamente o mesmo efeito da tag fmt do jstl, mostrando o poderoso recurso do toolbox, pois o velocity não tem nativo</p>
+<p>[sourcecode language="java"]<br />
+&lt;fmt:setLocale value=&quot;${pageContext.request.locale}&quot;/&gt;<br />
+&lt;fmt:message key=&quot;teste&quot; /&gt;<br />
+[/sourcecode]</p>
+<p>Partimos de que ja tem o velocity funcionando.</p>
+<p>Em nosso caso o sistema vai suportar ingles e português brasileiro para isso crie os arquivos na sua pasta de resources ou no src</p>
+<p>[sourcecode language="java"]<br />
+messages_en.properties<br />
+teste=en<br />
+messages_pt_BR.properties<br />
+teste=br[/sourcecode]</p>
+<p>em WEB-INF crie esse aquivo xml ficando WEB-INF/toolbox.xml</p>
+<p>[sourcecode language="java"]<br />
+&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;<br />
+&lt;toolbox&gt;<br />
+&lt;tool&gt;<br />
+&lt;key&gt;message&lt;/key&gt;<br />
+&lt;scope&gt;application&lt;/scope&gt;<br />
+&lt;class&gt;Tools&lt;/class&gt;<br />
+&lt;/tool&gt;<br />
+&lt;/toolbox&gt;<br />
+[/sourcecode]</p>
+<p>Assim o velocity vai carregar em escopo de aplicacao ou seja apena uma vez e expor os metodos publicos da classe Tools a todos os arquivos vm</p>
+<p>Tools.java</p>
+<p>[sourcecode language="java"]</p>
+<p>import java.util.Locale;<br />
+import java.util.ResourceBundle;</p>
+<p>public class Tools {</p>
+<p>private  ResourceBundle brMessages;<br />
+private  ResourceBundle enMessages;<br />
+private  Locale brlocale;<br />
+private  Locale enlocale;</p>
+<p>{<br />
+brlocale=new Locale(&quot;pt&quot;,&quot;BR&quot;);<br />
+enlocale=new Locale(&quot;en&quot;);<br />
+brMessages = ResourceBundle.getBundle(&quot;messages&quot;, brlocale);<br />
+enMessages = ResourceBundle.getBundle(&quot;messages&quot;, enlocale );<br />
+}</p>
+<p>public MessageResolver getMessage(Locale locale) {<br />
+if(locale.equals(enlocale)){<br />
+return new MessageResolver(enMessages);<br />
+}else{<br />
+return new MessageResolver(brMessages);<br />
+}<br />
+}</p>
+<p>}</p>
+<p>[/sourcecode]</p>
+<p>Claro que poderia ter uma logica mais dinamica para pegar qualquer propertie scaneando o diretorio, porém como no meu caso eu quero  suportar apenas ingles e português optei por simplicidade<br />
+MessageResolver.java</p>
+<p>[sourcecode language="java"]<br />
+import java.util.ResourceBundle;</p>
+<p>public class MessageResolver {</p>
+<p>private ResourceBundle resourceBundle;</p>
+<p>public MessageResolver(ResourceBundle resourceBundle) {<br />
+this.resourceBundle=resourceBundle;<br />
+}</p>
+<p>public String message(String key){<br />
+return resourceBundle.getString(key);<br />
+}<br />
+}</p>
+<p>[/sourcecode]</p>
+<p>e agora falta como fica no template</p>
+<p>[sourcecode language="java"]&lt;/pre&gt;<br />
+#set ($print = $message.getMessage($request.getLocale()))<br />
+$print.message(&quot;teste&quot;)<br />
+&lt;pre&gt;[/sourcecode]</p>
+<p>ai voce pode colocar esse set em um header e dar include e pronto.. ja temos nossa internacionalização.<br />
+caso seja nescessario acessar propriedades internacionalizadas no codigo podemos usar a mesma Tool passando o locale.<br />
+Veja que pelo menos mecanismo podemos fazer muito mais que formatadores e outras coisas mto legais com esse recurso do velocity.</p>
+<p>Espero que seja util pois tem pouca coisa de velocity pelo que procurei.</p>

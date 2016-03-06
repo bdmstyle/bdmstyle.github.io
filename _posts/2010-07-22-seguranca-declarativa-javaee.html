@@ -1,0 +1,31 @@
+---
+layout: post
+title: Segurança Declarativa JavaEE
+date: 2010-07-22 15:08:26.000000000 -03:00
+type: post
+published: true
+status: publish
+tags: [webapps]
+---
+<p>Hehe essa semana estou inspirado então vamos abordar um pouco sobre este assunto que é bem interessante.</p>
+<p>Antigamente em uma aplicação web nos costumávamos verificar a cada pagina se o usuário tinha permissão de acessá-la através de verificações redundantes ou na melhor das hipóteses usando um filtro Java que é uma solução mais elegante pelo menos... Mais na verdade existe uma maneira bem melhor de realizar essas verificações... Delegando essa responsabilidade para o container! Sim é muito mais elegante e segura, e um container às vezes pode ser bem caro então vamos dar mais trabalho para ele, e facilitar o nosso.</p>
+<p>Bom para começar, funciona da seguinte maneira você define restrições de segurança (Security Constraints) para determinados recursos, na verdade é tão melhor que você define restrições para um método HTTP tais como Post, Get, Put etc, ou seja, bem mais seguro, As restrições funcionam como portas temos que dizer quem pode passar pelas portas, e quem pode passar pelas portas? Para definir isso usamos Os papeis (Roles) que definem que tipos de usuário existem.</p>
+<p>Ok então na restrição de segurança nós associamos um papel, dizendo que esse papel esta autorizado a acessar o recurso.</p>
+<p>Dentro das restrições existem algumas coisas muito importantes.</p>
+<p>1 – Os recursos a serem restringidos</p>
+<p>2 – Os papeis (Roles) que definem que tipo de usuário pode acessar os recursos.</p>
+<p>3 - Os métodos que somente os papeis definidos tem permissão de realizar</p>
+<p>Vamos aos exemplos.</p>
+<p style="text-align:center;">Definindo um Papel</p>
+<p><a href="http://brunodanielmarinho.files.wordpress.com/2010/07/imagem.jpg"><img class="aligncenter size-full wp-image-99" title="imagem" src="{{ site.baseurl }}/assets/imagem.jpg" alt="" width="368" height="70" /></a></p>
+<p style="text-align:center;">Definindo a restrição de Segurança</p>
+<p style="text-align:center;"><a href="http://brunodanielmarinho.files.wordpress.com/2010/07/imagem2.jpg"><img class="aligncenter size-full wp-image-100" title="imagem2" src="{{ site.baseurl }}/assets/imagem2.jpg" alt="" width="500" height="252" /></a></p>
+<p>Uma questão que vale ressaltar e confunde é a seguinte... Neste exemplo o papel “manager” pode fazer requisições usando todos os métodos HTTP, confuso não? Vou explicar se nos tivéssemos outro papel digamos “user” esse papel poderia realizar todas as requisições usando todos os métodos HTTP exceto “GET”, ”PUT” e ”POST”, então você poder ler a restrição da seguinte maneira <strong>somente</strong> o papel “manager” pode executar GET, PUT e POST, mais ele também pode executar todos os outros.</p>
+<p>Mais algumas opções se ao invés de definir um papel você colocar “<strong>&lt;auth-constraint/&gt;” </strong>nenhum papel poderá acessar o recurso, e se colocar</p>
+<p><strong>&lt;auth-constraint&gt;</strong></p>
+<p><strong>&lt;role-name&gt;</strong><strong>*&lt;/role-name&gt;</strong></p>
+<p><strong>&lt;/auth-constraint&gt;</strong></p>
+<p>Ou omitir o elemento <strong>&lt;auth-constraint&gt; </strong>elemento todos podem acessar o recurso com qualquer método HTTP.</p>
+<p>Bom existe muitas coisas interessantes para estudar sobre segurança declarativa, como configurar o transporte dos dados, como realizar autenticações no código baseado em papeis etc... Especialmente se estiver estudando para SCWCD vai ter que saber muitos outros detalhes.</p>
+<p>Qualquer duvida estou a disposição.</p>
+<p>T+.</p>

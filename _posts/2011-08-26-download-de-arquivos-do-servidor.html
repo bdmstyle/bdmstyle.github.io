@@ -1,0 +1,80 @@
+---
+layout: post
+title: Download de arquivos do Servidor
+date: 2011-08-26 13:21:22.000000000 -03:00
+type: post
+published: true
+status: publish
+tags: [webapps]
+---
+<p>Olá tive ausente durante um tempo mais pretendo voltar a postar mais frequentemente e coisa melhores, hoje venho postar sobre como fazer download de arquivos do servidor.</p>
+<p>Fiz uma implementação em dois sabores onde você pode baixar que é o que o código principal faz ou visualizar no browser que a tag outputlink ja faz o trabalho duro.</p>
+<p>O código está fácil de entender e comentado por isso não vou explicar muita coisa, tem que saber um pouquinho de IO para não se perder.</p>
+<p>Até a próxima. <a href="http://brunodanielmarinho.files.wordpress.com/2011/08/downloadfile.ppt">Download  projeto no netbeans</a> está com extensão ppt (por que wordpress não permite fazer upload de arquivo zip) mais é so renomear para zip e descompactar.</p>
+<p>Disposição dos arquivos</p>
+<p>[caption id="attachment_263" align="alignnone" width="281" caption="Disposição Arquivos"]<a href="http://brunodanielmarinho.files.wordpress.com/2011/08/view.gif"><img class="size-full wp-image-263" title="Disposição Arquivos" src="{{ site.baseurl }}/assets/view.gif" alt="Disposição Arquivos" width="281" height="182" /></a>[/caption]</p>
+<p>-----------------------------------</p>
+<p>[sourcecode language="java"]<br />
+package com.wordpress.brunodanielmarinho;</p>
+<p>import java.io.File;<br />
+import java.io.FileInputStream;<br />
+import java.io.FileNotFoundException;<br />
+import java.io.IOException;<br />
+import java.io.OutputStream;<br />
+import javax.faces.bean.ManagedBean;<br />
+import javax.faces.bean.RequestScoped;<br />
+import javax.faces.context.ExternalContext;<br />
+import javax.faces.context.FacesContext;<br />
+import javax.servlet.ServletContext;<br />
+import javax.servlet.http.HttpServletResponse;</p>
+<p>@ManagedBean<br />
+@RequestScoped<br />
+public class DonwloadFile {</p>
+<p>public String download() {</p>
+<p>//O primeiro parametro é o nome do arquivo que aparece para o usuario no download pode ser qualquer um.<br />
+downloadFile(&quot;teste.txt&quot;, &quot;/teste/text.txt&quot;);</p>
+<p>return &quot;&quot;;<br />
+}</p>
+<p>public String downloadFile(String nomeDoArquivoGeradoParaDownload, String caminhoRelativoComNomeEextensao) {</p>
+<p>ExternalContext context = FacesContext.getCurrentInstance().getExternalContext();<br />
+ServletContext servletContext = (ServletContext) context.getContext();<br />
+//Obtem o caminho para o arquivo e efetua a leitura<br />
+byte[] arquivo = readFile(new File(servletContext.getRealPath(&quot;&quot;) + caminhoRelativoComNomeEextensao));<br />
+HttpServletResponse response =(HttpServletResponse) context.getResponse();<br />
+//configura o arquivo que vai voltar para o usuario.<br />
+response.setHeader(&quot;Content-Disposition&quot;,&quot;attachment;filename=\&quot;&quot; + nomeDoArquivoGeradoParaDownload + &quot;\&quot;&quot;);<br />
+response.setContentLength(arquivo.length);<br />
+//isso faz abrir a janelinha de download<br />
+response.setContentType(&quot;application/download&quot;);<br />
+//envia o arquivo de volta<br />
+try {<br />
+OutputStream out= response.getOutputStream();<br />
+out.write(arquivo);<br />
+out.flush();<br />
+out.close();<br />
+FacesContext.getCurrentInstance().responseComplete();<br />
+} catch (IOException e) {<br />
+System.out.print(&quot;Erro no envio do arquivo&quot;);<br />
+e.printStackTrace();<br />
+}<br />
+return &quot;&quot;;</p>
+<p>}</p>
+<p>//efetua a leitura do arquivo<br />
+public static byte[] readFile(File file) {<br />
+int len = (int) file.length();<br />
+byte[] sendBuf = new byte[len];<br />
+FileInputStream inFile = null;<br />
+try {<br />
+inFile = new FileInputStream(file);<br />
+inFile.read(sendBuf, 0, len);</p>
+<p>} catch (FileNotFoundException e) {<br />
+System.out.print(&quot;Arquivo não encontrado&quot;);<br />
+e.printStackTrace();<br />
+} catch (IOException e) {<br />
+System.out.print(&quot;Erro na leitura do arquivo&quot;);<br />
+e.printStackTrace();<br />
+}<br />
+return sendBuf;<br />
+}<br />
+}<br />
+[/sourcecode]</p>

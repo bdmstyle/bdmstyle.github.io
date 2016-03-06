@@ -1,0 +1,16 @@
+---
+layout: post
+title: Ignorar pastas e arquivos no Subversion (SVN)
+date: 2014-02-19 20:03:23.000000000 -03:00
+type: post
+published: true
+status: publish
+tags: [version-control]
+---
+<p>Depois de perder muito tempo procurando como fazer essa atividade simples, resolvi postar pois estava dificil de encontrar uma explicação descente.</p>
+<p>Primeiro vamos a estrutura de exemplo</p>
+<p>$ svn st<br />? project/trunk/target<br />? project/trunk/myfile.x</p>
+<p>1 - primeiro configuro um editor de texto, no meu caso vim<br />export SVN_EDITOR=vim</p>
+<p>2 - "svn propedit svn:ignore project/trunk/" vai abrir um novo arquivo e simplesmente digita "target" que é o diretorio que eu quero ignorar salva e funciona!</p>
+<p> $ svn st<br />? project/trunk/myfile.x</p>
+<p>Obrigado.</p>

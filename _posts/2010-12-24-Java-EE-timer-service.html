@@ -1,0 +1,1291 @@
+---
+layout: post
+title: JavaEE Timer Service
+date: 2010-12-24 16:54:00.000000000 -02:00
+type: post
+published: true
+status: publish
+tags: [webapps]
+---
+<p>Ola pessoal feliz natal,faz tempo que não apareço mais acredito que ano novo vida nova.<br />
+Então venho deixar um artigo que escrevi e inicialmente não iria postar por aqui, mais por questões particulares resolvi postar aqui mesmo.</p>
+<p>Este artigo é para quem conhece um pouco de JSF e Desenvolvimento Web, para quem gostaria de entrar no mundo EJB, o foco do artigo é mostrar a combinação de serviços e detalhar os Interceptadores e o Serviço de Tempo.</p>
+<p>No entanto QUALQUER UM sem importar o seu nível de conhecimento e que queria ver como funciona o mundo EJB pode seguir os passos que vai chegar no resultado final, o artigo da a base teórica, mostra como obter todas as ferramentas necessárias.</p>
+<p>Bom a formatação não esta uma beleza mais foi o que deu para fazer pois não tenho muito tempo.</p>
+<p>Video de auxilio para testar os codigos.</p>
+<p><a title="Video de Auxilio para testar os codigos" href="http://www.youtube.com/watch?v=6s8IZW2uM6U" target="_blank">http://www.youtube.com/watch?v=6s8IZW2uM6U</a></p>
+<p><a href="http://bit.ly/YQRyyI">baixar codigo fonte (atualizado)</a></p>
+<p><a href="http://brunodanielmarinho.files.wordpress.com/2010/12/explorando-servic3a7os-jee.pdf">Baixar artigo completo em pdf</a></p>
+<p>Sem mais enrolação, let's go!</p>
+<p>A necessidade de agendamento de tarefas em sistemas corporativos é uma realidade, e um dos importantes recursos da especificação EJB. Antigamente não havia maneira de realizar agendamento de forma padronizada em nossas aplicações. Com o EJB 2.1 foi introduzido o primeiro sistema de agendamento ainda bem limitado. Na especificação do EJB 3.0 API foi expandida, porém ainda deixava a desejar por falta de formas mais sofisticadas de realizar os agendamentos. Atualmente o EJB 3.1 demonstra o amadurecimento da API, e nos oferece diversas formas elegantes para trabalhar com o agendamento de tarefas. Outra importante ferramenta incluída na especificação EJB 3.0 são os interceptadores e nos oferecem uma infinidade de possibilidades como será apresentado no artigo.</p>
+<p><span style="color:#0000ff;">A aplicação e tecnologias</span></p>
+<p>Para nossa aplicação utilizaremos o NetBeans IDE 6.9.1, que já vem integrado com o servidor de aplicação Java EEGlassFish e o framework JavaServer Faces 2.0, proporcionando assim uma fácil configuração do ambiente de trabalho. A aplicação realizará o agendamento do envio de mensagens e tem o propósito de demonstrar o uso do Serviço de Tempo (Timer Service) do container java EE, em nosso caso Glassfish. Implementaremos também uma auditoria simples demonstrando o uso dos Interceptadores(Interceptors). Trabalharemos com um Stateless Session Bean estudando seu ciclo de vida e os métodos de callback.  Para a camada de apresentação utilizaremos o JavaServer Faces e realizaremos o controle de acesso a aplicação de forma simples com JAAS.</p>
+<p><span style="color:#0000ff;">O que são Stateless Session Bean</span></p>
+<p>Os Stateless Session Bean são utilizados para fornecer métodos de negócio que realizam tarefas específicas e não mantêm qualquer estado. Cada chamada de método é independente das chamadas anteriores, todos os dados necessários ao método deverão ser passados em seus parâmetros. Os Stateless Session Bean são mantidos em um pool no servidor de aplicação de forma que qualquer instância poderá atender qualquer solicitação da mesma forma. Vamos dar uma olhada em seu ciclo de vida (veja a <strong>Figura 1</strong>).</p>
+<div>
+<dl>
+<dt><a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g1.jpg"><img title="Ciclo de Vida" alt="Ciclo de Vida" src="{{ site.baseurl }}/assets/g1.jpg" width="500" height="305" /></a></dt>
+<dd>Ciclo de Vida</dd>
+</dl>
+</div>
+<p><strong>Figura 1.</strong> Ciclo de vida Stateless Session Bean.</p>
+<p>Seus ciclo de vida é bem simples, consiste em apenas  dois estados. O de inexistente onde ainda não foi instanciado pelo container e o de preparado no pool, onde esta já está pronto para atender as solicitações dos clientes. Na transição do estado de inexistente para o de preparado no pool  podemos anotar um método com a anotação @PostContruct, neste método de callback podemos inicializar algum recurso como uma conexão com o banco de dados. E no caminho de volta antes de destruir o bean podemos anotar um método com @PreDestroy, e realizar processamentos antes do container destruir o bean, como fechar a conexão com o banco de dados.</p>
+<p><span style="color:#0000ff;">A aplicação Stateless Session Bean ao projeto</span></p>
+<p>Nosso Stateless Session Bean será utilizado para prover as funcionalidades de agendamento e cancelamento de envio de mensagens. Inicialmente marcaremos um método chamado inicio()  com @PostConstruct para que sejamos notificados no console cada vez que  é criada uma nova instância deste Session Bean. Desejamos também manter uma estatística do número de realizados. Para esta tarefa utilizaremos uma variável de instancia em nosso EJB e a cada processamento incrementaremos esta variável. Para finalizar anotaremos o método fim() com @PreDestroy e antes do container destruir o Session Bean, ele nos mostrará o número de processamentos no console.</p>
+<p><span style="color:#0000ff;">O que são Interceptadores</span></p>
+<p>Um Interceptador (Interceptor) é uma classe POJO(<em>PlainOld Java Object</em>) que tem a capacidade de interceptar tanto chamadas de métodos de negócio quanto os eventos de ciclo de vida de um EJB. O ciclo de vida do interceptador é igual ao do tipo do EJB onde ele é aplicado, por exemplo, em nossa aplicação utilizamos um Stateless Session Bean então o interceptador tem exatamente os mesmos dois estados. Cada interceptador pode receber quaisquer recursos por injeção de dependência, em nosso caso utilizaremos a anotação @Resource para receber um objeto SessionContext, o qual nos fornece informações importantes para nossa auditoria.</p>
+<p>Interceptadores podem manipular tanto os parâmetros de entrada dos métodos , como o retorno dos mesmos, isto pode ser útil para por exemplo validar esses parâmetros utilizando um serviço externo. Outra aplicação do uso de interceptadores é separar o que é de lógica de negocio de lógica funcional. Supondo que seja necessário que o retorno de um método de negócio seja compactado, este código de compactação não faz parte da regra negócio, então colocando em um interceptador podemos reutilizar o código de compactação e ao mesmo tempo manter nosso EJB coeso.</p>
+<p>Outra importante funcionalidade dos interceptadores é de que podemos aplicá-los um conjunto de métodos particulares ou classes inteiras, oferecendo então um leve suporte a Orientação a Aspectos.</p>
+<p><span style="color:#0000ff;">A aplicação dos Interceptadores ao projeto</span></p>
+<p>Em nossa aplicação teremos duas tarefas para os interceptadores: um deles realizará a auditoria de nossos métodos de negocio. Será rastreado varias informações, como método invocado e a qual classe pertence, usuário que o chamou e a interface utilizada. Finalizando o interceptador irá sinalizar  no console quando os métodos de callback forem executados no EJB.</p>
+<p>Enquanto nosso outro interceptador terá a responsabilidade de  marcar o tempo de execução dos métodos de negocio e notificar no console.</p>
+<p><span style="color:#0000ff;">O serviço de tempo</span></p>
+<p>A API Timer Service atualmente no EJB 3.1 evoluiu muito e nos disponibiliza hoje diversas maneiras de agendar tarefas. Atualmente podemos trabalhar com expressões através de <strong>ScheduleExpression</strong> que nos oferece uma sintaxe bem simples e flexível. Temporizadores automáticos são configurados com a anotação <strong>@Schedule</strong> e são agendados ao instanciar o bean.</p>
+<p>Ao trabalhar com os métodos do objeto TimerService podemos agendar tarefas para serem executadas em determinada data e hora ou por intervalos de tempo. Os timers podem ser aplicados em uma serie de atividades comuns como a geração de relatórios e processamentos batch, realizar tarefas chave periodicamente como testes de conexão com serviços externos entre outros.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<p><span style="color:#0000ff;">Obtendo as ferramentas</span></p>
+<p>O Netbeans IDE 6.9.1 pode ser obtido entrando no site www.netbeans.org clicando no botão Download Free, você será redirecionado para uma tela com varias opções de download, escolha a opção java que venha com glassfish no momento de escrita do artigo o tamanho era 214 MB, lembrando que é necessário ter o JDK 6 para instalar o netbeans. Após o download execute o instalador, clique em personalizar e selecione as caixas de seleção Ide Base, Java SE, Java Web e EE, Glassfish clique em ok e depois em próximo ate finalizar a instalação.</p>
+<p><span style="color:#0000ff;">Configurando o ambiente e criando o projeto</span></p>
+<p>Para criar um novo projeto no NetBeans, acesse <em>Arquivo|Novo Projeto&gt;Java EE&gt;Aplicativo  Corporativo</em>, digite o nome do projeto “AgendaMensagem”, clique em no botão próximo. Nesta tela você pode escolher o servidor de aplicação escolha o Glassfih Server 3, deixe marcado para o netbeans criar o modulo EJB e o modulo de aplicativo WEB. Neste momento o NetBeans criou três projetos que juntos compõe uma aplicação corporativa. (veja a <strong>Figura 2</strong>).</p>
+<div>
+<dl>
+<dt><a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g2.jpg"><img title="Projetos" src="{{ site.baseurl }}/assets/g2.jpg" alt="Projetos" width="321" height="239" /></a></dt>
+<dd>Projetos</dd>
+</dl>
+</div>
+<p>O <strong>projeto EJB</strong> <strong> </strong>(AgendaMensagem-EJB) tem forma de feijão e empacota nossos Session Beans e interceptadores.</p>
+<p>O <strong>projeto Web</strong> (AgendaMensagem-WAR) com forma de globo empacota as páginas xhtml e os ManagedBeans do JSF .</p>
+<p><strong>O</strong><strong> projeto Enterprise (AgendaMensagem-EAR) </strong>em forma de triangulo é um um grande pacote. Seu conteúdo é formado pelo pacote WAR e o pacote EJB sendo ideal para distribuição da aplicação nos servidores de aplicação.</p>
+<p><span style="color:#0000ff;">Criando o EJB</span></p>
+<p>Para criar um novo Session Bean no netbeans clique com o botão direito no projeto EJB e escolha <em>Novo&gt;Outro&gt;Java EE&gt;Bean de Sessão. Vamos dar um nome ao</em> Session Bean digite  “<strong>MeuSessionBean</strong>” no nome do pacote digite “<strong>br.com.agenda</strong>” seleção do tipo de bean escolha a opção <em>sem estado (Stateless)</em> por fim marque para criar a interface local e finalize.  O código inicial do nosso bean de sessão está apresentado na <strong>Listagem 1</strong> <strong>.</strong> Nesta primeira versão do nosso bean criamos um método de callback chamado inicio() e anotamos ele com @PostContruct para que nós sejamos notificados no console cada vez que uma instância seja criada pelo container . Criamos nosso método de negocio chamado processamento() a principio ele imprimirá uma string simbólica, e a cada execução nós iremos incrementar nossa variável de instância controladora . Por fim criaremos outro método de callback método chamado fim() e iremos anotá-lo com @PreDestroy para que antes que o container destrua esta intancia ele nos notifique no console com a  quantidade de processamentos que foram realizados. Quando se trabalha com EJBs o cliente sempre acessa o método de negocio através de uma interface. No nosso caso quanto criamos o EJB no netbeans marcamos para ele criar a interface local que é utilizada quando a aplicação é trabalha na JVM local. Então para finalizar necessitamos expor o método na interface local para isso crie uma interface chamada “<strong>MeuSessionBeanLocal”</strong>atualizando nosso código como mostrado na <strong>Listagem 2</strong>.</p>
+<div>
+<p><strong>Listagem 1.</strong>Session Bean marcando os método de callback. MeuSessionBean.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda;</p>
+<p>import javax.annotation.PostConstruct;</p>
+<p>import javax.annotation.PreDestroy;</p>
+<p>import javax.ejb.Stateless;</p>
+<p>@Stateless</p>
+<p>public class MeuSessionBean implements MeuSessionBeanLocal {</p>
+<p>private int processamentos;</p>
+<p>@PostConstruct</p>
+<p>private void inicio() {</p>
+<p>System.out.print(&quot;Criada uma nova instância [ &quot; + this + &quot; ]&quot;);</p>
+<p>}</p>
+<p>public void processamento() {</p>
+<p>System.out.println(&quot;Processando nosso ejb&quot;);</p>
+<p>processamentos++;</p>
+<p>}</p>
+<p>@PreDestroy</p>
+<p>private void fim() {</p>
+<p>System.out.print(&quot; [ &quot; + this + &quot; ] realizou processamentos &quot; + processamentos);</p>
+<p>}<br />
+}<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem 2. </strong>Interface Local com método exposto. MeuSessionBeanLocal.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda;</p>
+<p>import javax.ejb.Local;</p>
+<p>@Local</p>
+<p>public interface MeuSessionBeanLocal {</p>
+<p>public void processamento();</p>
+<p>}<br />
+[/sourcecode]</p>
+<p><span style="color:#0000ff;">Configurando o projeto web</span></p>
+<p>Temos que configurar nosso projeto web para trabalhar com o JavaServer Faces , o netbeans vem integrado com os frameworks mais populares inclusive o JSF 2. Clique com o botão direito no projeto web<strong> AgendaMessagem-war</strong>escolha <strong><em>Propriedades&gt;Frameworks&gt;Adicionar&gt;JavaServer Faces&gt;Ok</em></strong>. Ao realizar esta configuração o JSF já vem configurado com <strong>/faces/* </strong>o que significa que temos que colocar <strong>faces/</strong> antes de acessar um arquivo, isto serve para que o servlet do JSF consiga trabalhar. No diretório <strong><em>páginas Web</em></strong> clique como botão direito em<strong><em>Novo&gt;Outro&gt;Diretório</em></strong> entre com o nome de “<strong>site</strong>” depois finalize, neste diretório ficarão as páginas da aplicação.  O netbeans gera por padrão uma pagina <em>index.jsp no diretório </em><strong>paginas web</strong><em> neste momento pode exclui-la</em> pois a mesma não será utilizada. Agora criaremos uma pagina xhtml chamada <em>cadastro</em> que neste momento irá conter apenas um botão. O botão chama o método <strong>cadastra()</strong> no MeuManagedBean que criaremos a seguir, o método retorna apenas uma simples String com o conteúdo “cadastro” que é o nome da pagina sem a extensão xhtml, esse recurso é a navegação implícita presente no JSF 2. Clique com o botão direto no <strong>diretório site&gt;novo&gt;outro&gt;web&gt;xhtml</strong>digite o nome da pagina “<strong>cadastro”</strong>, ver código da página na  <strong>Listagem 3.</strong></p>
+<div>
+<p><strong>Listagem 3</strong>. Primeira versão da tela de cadastro do sistema. Cadastro.xhtml.</p>
+</div>
+<p>[sourcecode language="html"]</p>
+<p>&lt;?xml version='1.0' encoding='UTF-8' ?&gt;</p>
+<p>&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd&quot;&gt;</p>
+<p>&lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot;</p>
+<p>xmlns:h=&quot;http://java.sun.com/jsf/html&quot;&gt;</p>
+<p>&lt;h:head&gt;</p>
+<p>&lt;title&gt;Cadastro&lt;/title&gt;</p>
+<p>&lt;/h:head&gt;</p>
+<p>&lt;h:body&gt;</p>
+<p>&lt;h:form id=&quot;cadastro&quot;&gt;</p>
+<p>&lt;h:commandButton value=&quot;Cadastrar&quot; action=&quot;#{meuManagedBean.cadastra}&quot; /&gt;</p>
+<p>&lt;/h:form&gt;</p>
+<p>&lt;/h:body&gt;</p>
+<p>&lt;/html&gt;<br />
+[/sourcecode]</p>
+<p><span style="color:#0000ff;">Criando a ManagedBean</span><a href="#_msocom_1"></a></p>
+<p>O ManagedBean é a classe que fará a comunicação entre as paginas de nossa aplicação com o EJB. Marcamos o ManagedBean com escopo de sessão, utilizando a anotação <strong>@EJB</strong> e injetamos uma referencia a interface local de nosso Session Bean ultilizando que nos disponibiliza o método <strong>processamento(). </strong>Criamos finalmente o método<strong>cadastra()</strong> no ManagedBean e este chama o metodo <strong>processamento()</strong> em nosso EJB.</p>
+<p>Clique com botão direito no projeto web<strong>&gt;novo&gt;outro&gt;Java Server Faces&gt;Bean gerenciado JSF </strong>digite o nome do ManagedBean como <strong>MeuManagedBean</strong> digite tamém o nome do pacote <strong>br.com.agenda.beans</strong><strong> </strong>, mude o escopo para session e <em>Finalize</em>. O código do MeuManagedBean é mostrado na Listagem 4<a href="#_msocom_7"></a> .</p>
+<div>
+<p><strong>Listagem 4</strong>. Managed bean invocando metodo no EJB. MeuManagedBean.java</p>
+</div>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda.beans;</p>
+<p>import br.com.agenda.MeuSessionBeanLocal;</p>
+<p>import javax.faces.bean.ManagedBean;</p>
+<p>import javax.faces.bean.SessionScoped;</p>
+<p>import javax.ejb.EJB;</p>
+<p>@ManagedBean</p>
+<p>@SessionScoped</p>
+<p>public class MeuManagedBean {</p>
+<p>@EJB</p>
+<p>MeuSessionBeanLocal ejb;</p>
+<p>public MeuManagedBean() {</p>
+<p>}</p>
+<p>public String cadastra() {</p>
+<p>ejb.processamento();</p>
+<p>return &quot;cadastro&quot;;</p>
+<p>}</p>
+<p>}<br />
+[/sourcecode]</p>
+<p><em>Iremos configurar a pagina inicial da aplicação para que seja sempre a pagina de cadastro. Altere o arquivo<strong>web.xml</strong> que está dentro do diretório <strong>web-inf</strong> e na linha de onde está</em> <strong>&lt;welcome-file&gt;faces/index.xhtml&lt;/welcome-file&gt; </strong>altere<em> para </em><strong>&lt;welcome-file&gt;faces/site/cadastro.xhtml&lt;/welcome-file&gt;.</strong></p>
+<p><strong> </strong></p>
+<p><em>Chegou a hora de realizarmos o primeiro teste! Clique com</em> <em>o botão direito no <strong>AgendaMensagem-war</strong> e escolha a opção executar, o netbeans irá iniciar o servidor e fazer o deploy da aplicação. Em alguns segundos o navegador abrirá com nossa tela de cadastro. Clique apenas duas vezes no botão cadastrar</em> <em>e retorne ao NetBeans na aba do GlassFish perto do console e pare o servidor clicando no x.</em></p>
+<p><em> </em></p>
+<div>
+<dl>
+<dt><em><em><a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g3.jpg"><img title="saida" src="{{ site.baseurl }}/assets/g3.jpg" alt="saida" width="500" height="88" /></a></em></em></dt>
+<dd>saida</dd>
+</dl>
+</div>
+<p><em> </em></p>
+<p><strong>Figura 3</strong>. Resultado do teste do bean de sessão no console do glassfish</p>
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<p>Fica fácil de entender o identificar o funcionamento  dos métodos de callback, verificando as notificações no console. Repare que da primeira vez que clicamos no botão cadastrar o servidor instanciou um bean e fomos notificados. Na segunda vez foi usado apenas  um bean do pool e não criado um novo, somente o método de negócio foi executado. Para finalizar ao desligarmos o servidor antes de destruir nosso bean fomos notificados que ele realizou dois processamentos.</p>
+<p><span style="color:#0000ff;">Adicionando Segurança a aplicação com JAAS</span></p>
+<p>Posteriormente para que nosso interceptador possa ter acesso a identidade de quem invoca os métodos de negocio em nossos EJBs, e afim de gravar essa informação na auditoria. É necessário definir uma forma de acesso ao nosso sistema, definindo um grupo, um usuário e uma senha. Nós utilizaremos um <em>realm</em> de dados, que é basicamente a forma com que o container busca os dados do usuário para realizar a autenticação, no nosso caso optaremos pela forma simples de armazenamento em arquivo. No netbeans temos uma guia chamada <strong>serviços</strong>,  esta guia prove acesso a recursos como por exemplo o banco de dados Derby Java DB e o GlassFish. Na guia <strong>serviços&gt;servidores&gt;glassfish Server 3</strong> clique com o botão direito e clique <strong>visualizar console admin</strong><a href="#_msocom_3"></a> <strong>. </strong>O navegador irá abrir e começara a carga do aplicativo, pode demorar um pouco é normal. O  admin console do glassfish permite realizar toda configuração do container, nele podemos visualizar vários items no menu de opções, localize e expanda o item<strong>segurança&gt;domínios&gt;novo domínio</strong> <strong> </strong>defina o nome <strong>agendaRealm.</strong> Agora que criamos nosso realm temos que configura-lo , abaixo temos os tipos de realm de dados disponíveis em um combo, queremos o mais simples então escolha o item que termina em <strong>FileRealm</strong> .</p>
+<p>No contexto JAAS temos que colocar o tipo de arquivo digitando <strong>fileRealm</strong> e abaixo em  <strong>arquivo de tecla</strong> digite<strong>${com.sun.aas.instanceRoot}</strong> <strong>/config/agenda-keyfile</strong> este é o nome e caminho do arquivo onde ficarão armazenados o usuário e a senha, clique no botão <strong>Ok.</strong> Voce ira voltar para a tela  onde os realms são listados, localize<a href="http://localhost:4848/common/security/realms/realmEdit.jsf?configName=server-config&amp;name=javamagazinerealm"><strong></strong></a><strong>agendaRealm</strong> e clique nele. Agora já podemos criar nosso usuário efetivamente, no canto superior esquerdo temos o botão <strong>gerenciar usuários</strong> &gt;<strong>novo</strong> agora digite no campo id <strong>agenda, </strong>no grupo de usuário <strong>Usuarios</strong> e no campo de senha digite <strong>123</strong> depois clique em <strong>Ok</strong>, agora temos nosso container Java EE configurado.</p>
+<p><span style="color:#0000ff;">Adicionando Segurança a aplicação</span></p>
+<p>Neste momento, nossa aplicação tem que ser configurada para que possamos restringir o acesso a de usuários não autenticados as paginas do diretório <strong>site</strong>. Necessitamos de uma pagina de login que requisite nome de usuário e senha, e uma pagina de erro para quando o usuário falhar na autenticação ele ser informado. Para o login vamos utilizar a pagina index.xhtml que no caso já existe o netbeans havia criado ver codigo na <strong>Listagem 7,</strong> criaremos pagina de erro<em>erroLogin.xhtml</em> no diretório <strong>paginas web</strong> na ver <strong>Listagem 8</strong> . Acesse o arquivo <em>web.xml</em> dentro do diretório <em>web-inf </em><strong>adicione</strong> as seguintes linhas da <strong>Listagem 5 </strong>dentro da tag<strong>&lt;web-app&gt;. </strong>Na mesma pasta modifique o <em>sun-web.xml</em>realizando o mapeamento dos grupos de usuários com os papéis ver na <strong>Listagem 6.</strong> Nós definimos uma restrição de segurança para a pasta <strong><em>site</em></strong>, onde somente os usuários autenticados pelo container usando o <strong>agendarealm</strong> e que são<strong>Papel-Usuarios</strong> podem acessar os arquivos..</p>
+<p><em>Agora nossa aplicação está protegida. Ao realizar o teste novamente será apresentado a pagina solicitado o login e senha para acessar as páginas dentro do diretório site.</em></p>
+<div>
+<p><strong>Listagem 5</strong>. Linhas para adicionar no Web.xml</p>
+<p>[sourcecode language="html"]</p>
+<p>&lt;security-constraint&gt;</p>
+<p>&lt;web-resource-collection&gt;</p>
+<p>&lt;web-resource-name&gt;Acesso&lt;/web-resource-name&gt;</p>
+<p>&lt;url-pattern&gt;/faces/site/*&lt;/url-pattern&gt;</p>
+<p>&lt;/web-resource-collection&gt;</p>
+<p>&lt;auth-constraint&gt;</p>
+<p>&lt;description/&gt;</p>
+<p>&lt;role-name&gt;Papel-Usuarios&lt;/role-name&gt;</p>
+<p>&lt;/auth-constraint&gt;</p>
+<p>&lt;/security-constraint&gt;</p>
+<p>&lt;login-config&gt;</p>
+<p>&lt;auth-method&gt;FORM&lt;/auth-method&gt;</p>
+<p>&lt;realm-name&gt;agendaRealm&lt;/realm-name&gt;</p>
+<p>&lt;form-login-config&gt;</p>
+<p>&lt;form-login-page&gt;/faces/index.xhtml&lt;/form-login-page&gt;</p>
+<p>&lt;form-error-page&gt;/faces/erroLogin.xhtml&lt;/form-error-page&gt;</p>
+<p>&lt;/form-login-config&gt;</p>
+<p>&lt;/login-config&gt;</p>
+<p>&lt;security-role&gt;</p>
+<p>&lt;role-name&gt;Papel-Usuarios&lt;/role-name&gt;</p>
+<p>&lt;/security-role&gt;<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem 6</strong>. Codigo atualizado do Sun-Web.xml</p>
+<p>[sourcecode language="html"]</p>
+<p>&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;</p>
+<p>&lt;!DOCTYPE sun-web-app PUBLIC &quot;-//Sun Microsystems, Inc.//DTD GlassFish Application Server 3.0 Servlet 3.0//EN&quot; &quot;http://www.sun.com/software/appserver/dtds/sun-web-app_3_0-0.dtd&quot;&gt;</p>
+<p>&lt;sun-web-app error-url=&quot;&quot;&gt;</p>
+<p>&lt;context-root&gt;/AgendaMensagem-war&lt;/context-root&gt;</p>
+<p>&lt;security-role-mapping&gt;</p>
+<p>&lt;role-name&gt;Papel-Usuarios&lt;/role-name&gt;</p>
+<p>&lt;group-name&gt;Usuarios&lt;/group-name&gt;</p>
+<p>&lt;/security-role-mapping&gt;</p>
+<p>&lt;class-loader delegate=&quot;true&quot;/&gt;</p>
+<p>&lt;jsp-config&gt;</p>
+<p>&lt;property name=&quot;keepgenerated&quot; value=&quot;true&quot;&gt;</p>
+<p>&lt;description&gt;Keep a copy of the generated servlet class' java code.&lt;/description&gt;</p>
+<p>&lt;/property&gt;</p>
+<p>&lt;/jsp-config&gt;</p>
+<p>&lt;/sun-web-app&gt;<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem 7</strong>.Formulario de login do sistema. index.xhtml</p>
+</div>
+<p>[sourcecode language="html"]<br />
+&lt;?xml version='1.0' encoding='UTF-8' ?&gt;</p>
+<p>&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd&quot;&gt;</p>
+<p>&lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot;</p>
+<p>xmlns:h=&quot;http://java.sun.com/jsf/html&quot;</p>
+<p>xmlns:f=&quot;http://java.sun.com/jsf/core&quot;&gt;</p>
+<p>&lt;h:head&gt;</p>
+<p>&lt;title&gt;Login&lt;/title&gt;</p>
+<p>&lt;/h:head&gt;</p>
+<p>&lt;h:body&gt;</p>
+<p>&lt;f:verbatim&gt;</p>
+<p>Login no Sistema</p>
+<p>&lt;hr/&gt;</p>
+<p>&lt;form method=&quot;post&quot; action=&quot;#{request.contextPath}/j_security_check&quot;&gt;</p>
+<p>Usuario &lt;input type=&quot;text&quot; id=&quot;username&quot; name=&quot;j_username&quot;/&gt;</p>
+<p>Senha &lt;input type=&quot;password&quot; id=&quot;password&quot; name=&quot;j_password&quot;/&gt;</p>
+<p>&lt;input type=&quot;submit&quot; value=&quot;Login&quot;/&gt;</p>
+<p>&lt;br/&gt;</p>
+<p>&lt;hr/&gt;</p>
+<p>&lt;/form&gt;</p>
+<p>&lt;/f:verbatim&gt;</p>
+<p>&lt;/h:body&gt;</p>
+<p>&lt;/html&gt;<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem 8</strong>.Pagina de erro para o usuário. erroLogin.xhml</p>
+</div>
+<p>[sourcecode language="html"]<br />
+&lt;?xml version='1.0' encoding='UTF-8' ?&gt;</p>
+<p>&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd&quot;&gt;</p>
+<p>&lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot;</p>
+<p>xmlns:h=&quot;http://java.sun.com/jsf/html&quot;&gt;</p>
+<p>&lt;h:head&gt;</p>
+<p>&lt;title&gt;Login errado&lt;/title&gt;</p>
+<p>&lt;/h:head&gt;</p>
+<p>&lt;h:body&gt;</p>
+<p>&lt;h:form&gt;</p>
+<p>&lt;h:outputText value=&quot;Usuario ou senha errada&quot;/&gt;</p>
+<p>&lt;h:commandButton value=&quot;Realizar Login &quot; action=&quot;index&quot;/&gt;</p>
+<p>&lt;/h:form&gt;</p>
+<p>&lt;/h:body&gt;</p>
+<p>&lt;/html&gt;<br />
+[/sourcecode]</p>
+<p><span style="color:#0000ff;">Codificando os interceptadores</span></p>
+<p>Chegou a hora de começar a implementar nossa auditoria usando os interceptadores. A sintaxe de um interceptador consiste em uma classe que deve conter um método público anotado com @AroundInvoke, este mesmo método deve possuir um objeto InvocationContext como parâmetro, lançar a exceção Exception e retornar um Object, no primeiro interceptador de nossa aplicação iremos utilizar o InvocationContext para obter qual o método de negócio chamado e qual instância do EJB foi usada, o interceptador também pode obter recursos por injeção de dependência assim obteremos um SessionContext que nos fornece o usuário que esta chamando o método e a interface utilizada, quando o método proceed() do invocationContext é chamado o método interceptado será executado e nossa auditoria nos notifica antes e depois deste acontecimento, além disso nós colocamos uma notificação antes e depois de cada método do ciclo de vida ver código na <strong>Listagem 9, </strong>o segundo interceptador é mais simples e apenas marca o tempo da execução dos métodos ver <strong>Listagem 10, </strong>crie os dois interceptadores como classes java simples no mesmo pacote do MeuSessionBean.</p>
+<div>
+<p><strong>Listagem 9</strong>. Primeira versão do Interceptador. MeuInterceptador.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda;</p>
+<p>import javax.annotation.*;</p>
+<p>import javax.ejb.SessionContext;</p>
+<p>import javax.interceptor.*;</p>
+<p>public class MeuInterceptador {</p>
+<p>@Resource</p>
+<p>private SessionContext context;</p>
+<p>@PostConstruct</p>
+<p>void inicio(InvocationContext ctx) throws Exception {</p>
+<p>System.out.println(&quot;Antes do @PostConstruct do EJb&quot;);</p>
+<p>ctx.proceed();</p>
+<p>System.out.println(&quot;Depois de @PostConstruct do EJb &quot;);</p>
+<p>}</p>
+<p>@PreDestroy</p>
+<p>void fim(InvocationContext ctx) throws Exception {</p>
+<p>System.out.println(&quot;Antes do @PreDestroy o EJb&quot;);</p>
+<p>ctx.proceed();</p>
+<p>System.out.println(&quot;Depois do @PreDestroy o EJb &quot;);</p>
+<p>}</p>
+<p>@AroundInvoke</p>
+<p>public Object auditoria(InvocationContext invocationContext) throws Exception {</p>
+<p>System.out.println(&quot;Interceptador executando antes do metodo...&quot;);</p>
+<p>System.out.println(&quot;Foi interceptado o Metodo &quot; + invocationContext.getMethod() + &quot; \n chamado pelo Usuario [ &quot; + context.getCallerPrincipal() + &quot; ] &quot; + &quot; em uma instancia da classe &quot; + invocationContext.getTarget() + &quot;\n ultilizando a &quot; + context.getInvokedBusinessInterface());</p>
+<p>Object proceed = invocationContext.proceed();</p>
+<p>System.out.print(&quot;Interceptador executando depois do metodo...&quot;);</p>
+<p>System.out.println(&quot;-----------------------&quot;);</p>
+<p>return proceed;</p>
+<p>}</p>
+<p>}<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem 10</strong>. Interceptador que marca o tempo. MeuTemporizador.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda;</p>
+<p>import javax.interceptor.*;</p>
+<p>public class MeuTemporizador {</p>
+<p>@AroundInvoke</p>
+<p>public Object marcaTempo(InvocationContext invocationContext) throws Exception {</p>
+<p>long comeco = System.currentTimeMillis();</p>
+<p>Object proceed = invocationContext.proceed();</p>
+<p>System.out.println(&quot;O Metodo levou &quot; + (System.currentTimeMillis() - comeco) + &quot; Milissegundos para ser executado&quot;);</p>
+<p>return proceed;</p>
+<p>}</p>
+<p>}<br />
+[/sourcecode]</p>
+<p><span style="color:#0000ff;">Aplicando os interceptadores</span></p>
+<p>Os interceptadores podem ser aplicados á métodos individuais utilizando a anotação @Interceptor(Class) ou em todos os métodos de uma classe anotando a classe com @Interceptors({Class[]}), vamos alterar o MeuSessionBean e aplicar os interceptadores ver <strong>Listagem 11.</strong></p>
+<div>
+<p><strong>Listagem 11</strong>. Segunda versão do MeuSessionBean.java</p>
+<p>[sourcecode language="java"]</p>
+<p>Package br.com.agenda;</p>
+<p>importjavax.annotation.*;</p>
+<p>importjavax.ejb.Stateless;</p>
+<p>importjavax.interceptor.Interceptors;</p>
+<p>@Stateless</p>
+<p>@Interceptors({MeuInterceptador.class,MeuTemporizador.class})</p>
+<p>public class MeuSessionBean implements MeuSessionBeanLocal {</p>
+<p>privateint processamentos;</p>
+<p>@PostConstruct</p>
+<p>privatevoid inicio() {</p>
+<p>System.out.print(&quot;Criada uma nova instância [ &quot; + this + &quot; ]&quot;);</p>
+<p>}</p>
+<p>publicvoid processamento() {</p>
+<p>System.out.println(&quot;Processando nosso ejb&quot;);</p>
+<p>processamentos++;</p>
+<p>}</p>
+<p>@PreDestroy</p>
+<p>privatevoid fim() {</p>
+<p>System.out.print(&quot; [ &quot; + this + &quot; ] realizou processamentos &quot; + processamentos);</p>
+<p>}</p>
+<p>}<br />
+[/sourcecode]</p>
+<p><em>Ao realizar esse novo teste, podemos verificar no console todas as informações sobre as chamadas de método (veja a Figura 4).</em></p>
+<div>
+<dl>
+<dt><a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g4.jpg"><img title="saida" src="{{ site.baseurl }}/assets/g4.jpg" alt="saida" width="500" height="135" /></a></dt>
+<dd>saida</dd>
+</dl>
+</div>
+<p><strong>Figura 4</strong>. Chamada de método com os interceptadores aplicados.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<p><span style="color:#0000ff;">Utilizando timer service</span></p>
+<p>Chegou a hora em que finalmente vamos agendar nossos serviços, primeiramente vamos modificar  MeuSessionBean novamente e injetar uma referencia ao timerService usando a anotação @Resource, modificaremos nosso método processamento() para que ele receba um objeto Calendar representando a data e hora e um objeto Mensagem que representa a mensagem que desejamos enviar, esse objeto deve ser criado no projeto EJB em um novo pacote <strong>br.com.agenda.modelo</strong> ver <strong>Listagem 12</strong> , dentro do método processamento()  iremos utilizar o método createTimer() do objeto timer que é uma referencia injetada do TimerService, ele tem dois parâmetros um objeto Date contendo data e hora de execução e um objeto Serializable que usaremos para identificar o timer.Temos que criar um método para ser executado quando o timer atingir a data e hora desejada vamos anotá-lo com @Timeout no nosso caso é o método tempo() que recebe um timer como parâmetro, nós utilizamos o método getInfo() para recuperar a mensagem agendada, em nosso exemplo imprimimos no console suas informações, este código poderia ser trocado por um trecho real de envio de email. No MeuSessionBean criamos outro método chamado listaTimer() que retorna uma lista de mensagens e utiliza mais um método do objeto timer o getTimers() que nos retorna todos os timers agendados então extraímos as mensagem destes timers e devolvemos em forma de um lista de Mensagens, para finalizar temos o método removeTimer() que baseado em um id cancela um timer especifico utilizando outro método do objeto timer, o cancel(). Vamos atualizar nosso código da interface local ver <strong>Listagem 13</strong>,e o código final do MeuSessionBean ver <strong>Listagem 14.</strong></p>
+<div>
+<p><strong>Listagem 12</strong>. Classe representando as mensagens. Mensagem.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda.modelo;</p>
+<p>import java.io.Serializable;</p>
+<p>import java.util.Date;</p>
+<p>public class Mensagem implements Serializable {</p>
+<p>private int id;</p>
+<p>private String proprietario;</p>
+<p>private String mensagem;</p>
+<p>private boolean selecionado;</p>
+<p>private Date data;</p>
+<p>public Mensagem(int id, String proprietario, String mensagem, Date data) {</p>
+<p>this.id = id;</p>
+<p>this.proprietario = proprietario;</p>
+<p>this.mensagem = mensagem;</p>
+<p>this.data = data;</p>
+<p>}</p>
+<p>public Date getData() {</p>
+<p>return data;</p>
+<p>}</p>
+<p>public void setData(Date data) {</p>
+<p>this.data = data;</p>
+<p>}</p>
+<p>public int getId() {</p>
+<p>return id;</p>
+<p>}</p>
+<p>public void setId(int id) {</p>
+<p>this.id = id;</p>
+<p>}</p>
+<p>public String getMensagem() {</p>
+<p>return mensagem;</p>
+<p>}</p>
+<p>public void setMensagem(String mensagem) {</p>
+<p>this.mensagem = mensagem;</p>
+<p>}</p>
+<p>public String getProprietario() {</p>
+<p>return proprietario;</p>
+<p>}</p>
+<p>public void setProprietario(String proprietario) {</p>
+<p>this.proprietario = proprietario;</p>
+<p>}</p>
+<p>public boolean isSelecionado() {</p>
+<p>return selecionado;</p>
+<p>}</p>
+<p>public void setSelecionado(boolean selecionado) {</p>
+<p>this.selecionado = selecionado;</p>
+<p>}</p>
+<p>@Override</p>
+<p>public boolean equals(Object obj) {</p>
+<p>if (obj == null) {</p>
+<p>return false;</p>
+<p>}</p>
+<p>if (getClass() != obj.getClass()) {</p>
+<p>return false;</p>
+<p>}</p>
+<p>final Mensagem other = (Mensagem) obj;</p>
+<p>if (this.id != other.id) {</p>
+<p>return false;</p>
+<p>}</p>
+<p>return true;</p>
+<p>}</p>
+<p>@Override</p>
+<p>public int hashCode() {</p>
+<p>int hash = 3;</p>
+<p>hash = 41 * hash + this.id;</p>
+<p>return hash;</p>
+<p>}</p>
+<p>}</p>
+<p>[/sourcecode]</p>
+<div>
+<p><strong>Listagem 13</strong>. Versao Final InterfaceLocal.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda;</p>
+<p>import javax.ejb.Local;</p>
+<p>@Local</p>
+<p>public interface MeuSessionBeanLocal {</p>
+<p>public void processamento(br.com.agenda.modelo.Mensagem msg, java.util.Calendar c);</p>
+<p>public java.util.List&lt;br.com.agenda.modelo.Mensagem&gt; listaTimer();</p>
+<p>public void removeTimer(int id);</p>
+<p>}<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem 14</strong>. Versão Final MeuSessionBean.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda;</p>
+<p>import br.com.agenda.modelo.Mensagem;</p>
+<p>import java.text.SimpleDateFormat;</p>
+<p>import java.util.*;</p>
+<p>import javax.annotation.*;</p>
+<p>import javax.ejb.*;</p>
+<p>import javax.ejb.Timer;</p>
+<p>import javax.interceptor.Interceptors;</p>
+<p>@Stateless</p>
+<p>@Interceptors({MeuInterceptador.class,MeuTemporizador.class})</p>
+<p>public class MeuSessionBean implements MeuSessionBeanLocal {</p>
+<p>@Resource</p>
+<p>private TimerService timer;</p>
+<p>private int processamentos;</p>
+<p>@PostConstruct</p>
+<p>private void inicio() {</p>
+<p>System.out.print(&quot;Criada uma nova instancia [ &quot; + this + &quot; ]&quot;);</p>
+<p>}</p>
+<p>@Timeout</p>
+<p>public void tempo(Timer timerObj) {</p>
+<p>System.out.print(&quot;timer executado&quot; + timerObj);</p>
+<p>Mensagem m = (Mensagem) timerObj.getInfo();</p>
+<p>SimpleDateFormat data = new SimpleDateFormat(&quot;dd/MM/yyyy HH:mm&quot;);</p>
+<p>System.out.print(&quot; A Mensagem de id :&quot; + m.getId() + &quot; pertencente a o proprietario: &quot; + m.getProprietario()</p>
+<p>+ &quot; foi enviada em: &quot; + data.format(m.getData()) + &quot; com o conteudo: &quot; + m.getMensagem());</p>
+<p>}</p>
+<p>public void processamento(Mensagem msg, Calendar c) {</p>
+<p>timer.createTimer(c.getTime(), msg);</p>
+<p>processamentos++;</p>
+<p>}</p>
+<p>public List&lt;Mensagem&gt; listaTimer() {</p>
+<p>List&lt;Mensagem&gt; listaMessagens = new ArrayList&lt;Mensagem&gt;();</p>
+<p>Collection&lt;Timer&gt; lista = timer.getTimers();</p>
+<p>for (Timer t : lista) {</p>
+<p>Mensagem m = ((Mensagem) t.getInfo());</p>
+<p>if (m != null) {</p>
+<p>listaMessagens.add(m);</p>
+<p>}</p>
+<p>}</p>
+<p>return listaMessagens;</p>
+<p>}</p>
+<p>public void removeTimer(int id) {</p>
+<p>Collection&lt;Timer&gt; lista = timer.getTimers();</p>
+<p>for (Timer t : lista) {</p>
+<p>Mensagem m = ((Mensagem) t.getInfo());</p>
+<p>if (m.getId() == id) {</p>
+<p>t.cancel();</p>
+<p>}</p>
+<p>}</p>
+<p>}</p>
+<p>@PreDestroy</p>
+<p>private void fim() {</p>
+<p>System.out.print(&quot; [ &quot; + this + &quot; ] realizou processamentos &quot; + processamentos);</p>
+<p>}</p>
+<p>}</p>
+<p>[/sourcecode]</p>
+<p><span style="color:#0000ff;">Criando a pagina que gerencia os agendamentos</span></p>
+<p>Em nosso projeto web AgendaMesagem-war temos que  atualizar o código da página de <em>cadastro</em> para que ele permita o usuário digitar os campos da mensagem,  assim como a  data e hora desejada de envio ver na <strong>Listagem 16</strong>. Esta pagina chama o método cadastra()  no MeuManagedBean que por sua vez chama o metodo de negocio negócio processamento() passando como parâmetro um objeto <strong>Calendar </strong>representando a data e hora desejada e um objeto <strong>Mensagem</strong> construído com os dados que o usuário digitou no formulário ver <strong>Listagem 15</strong>. Dentro do diretório <em>site</em> crie o arquivo <em>grade.xhtml, </em>esta pagina será  onde o usuário irá gerenciar os agendamentos, em uma tabela podemos visualizar os serviços agendados e cancelá-los convenientemente. Essa tela utiliza os métodos listaTimer() para preencher os dois componentes <strong>datatable</strong> que temos nesta pagina, um deles é onde visualizamos e podemos selecionar os timers para o cancelamento. O outro <strong>datatable</strong> exibe as mensagem selecionadas para exclusão  quando clicado no botão excluir o método exclui do MeuManagedBean que por sua extrai o <strong>id</strong> das mensagens e chama o método de negocio removeTimer() cancelando os timer selecionados ver <strong>Listagem 16</strong>. Temos que atualizar nosso MeuManagedBean com os novos métodos utilizados nas paginas de cadastro e de grade ver <strong>Listagem 17</strong> <strong>.</strong></p>
+<div>
+<p><strong>Listagem 15</strong>. Versão Final cadastro.xhtml</p>
+<p>[sourcecode language="html"]</p>
+<p>&lt;?xml version='1.0' encoding='UTF-8' ?&gt;</p>
+<p>&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd&quot;&gt;</p>
+<p>&lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot;</p>
+<p>xmlns:h=&quot;http://java.sun.com/jsf/html&quot;</p>
+<p>xmlns:f=&quot;http://java.sun.com/jsf/core&quot;</p>
+<p>xmlns:c=&quot;http://java.sun.com/jsp/jstl/core&quot;&gt;</p>
+<p>&lt;h:head&gt;</p>
+<p>&lt;title&gt;Cadastro&lt;/title&gt;</p>
+<p>&lt;/h:head&gt;</p>
+<p>&lt;h:body&gt;</p>
+<p>&lt;h:form id=&quot;cadastro&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Agendamento de Eventos&quot;/&gt;</p>
+<p>&lt;h:panelGrid&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;id &quot;/&gt;</p>
+<p>&lt;h:inputText value=&quot;#{meuManagedBean.inputId}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Nome &quot;/&gt;</p>
+<p>&lt;h:inputText value=&quot;#{meuManagedBean.inputNome}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Mensagem&quot;/&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:inputTextarea value=&quot;#{meuManagedBean.inputMensagem}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:messages/&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:panelGrid columns=&quot;5&quot;&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Dia &quot;/&gt;</p>
+<p>&lt;h:inputText size=&quot;5&quot; value=&quot;#{meuManagedBean.inputDia}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Mes &quot;/&gt;</p>
+<p>&lt;h:inputText  size=&quot;5&quot; value=&quot;#{meuManagedBean.inputMes}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Ano &quot;/&gt;</p>
+<p>&lt;h:inputText  size=&quot;5&quot; value=&quot;#{meuManagedBean.inputAno}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Hora &quot;/&gt;</p>
+<p>&lt;h:inputText  size=&quot;5&quot; value=&quot;#{meuManagedBean.inputHora}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Minuto &quot;/&gt;</p>
+<p>&lt;h:inputText  size=&quot;5&quot; value=&quot;#{meuManagedBean.inputMinuto}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:commandButton value=&quot;Agendar&quot;  action=&quot;#{meuManagedBean.cadastra}&quot;/&gt;</p>
+<p>&lt;h:commandButton value=&quot;Grade&quot;  action=&quot;#{meuManagedBean.grade}&quot;/&gt;</p>
+<p>&lt;/h:form&gt;</p>
+<p>&lt;/h:body&gt;</p>
+<p>&lt;/html&gt;<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem16</strong>. Página de gerência de agendamentos .grade.xhtml</p>
+<p>[sourcecode language="html"]</p>
+<p>&lt;?xml version='1.0' encoding='UTF-8' ?&gt;</p>
+<p>&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd&quot;&gt;</p>
+<p>&lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot;</p>
+<p>xmlns:h=&quot;http://java.sun.com/jsf/html&quot;</p>
+<p>xmlns:f=&quot;http://java.sun.com/jsf/core&quot;</p>
+<p>xmlns:c=&quot;http://java.sun.com/jsp/jstl/core&quot;&gt;</p>
+<p>&lt;h:head&gt;&lt;title&gt;Grade&lt;/title&gt;&lt;/h:head&gt;</p>
+<p>&lt;h:body&gt;</p>
+<p>&lt;h:form id=&quot;grade&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Grade de Eventos&quot;/&gt;</p>
+<p>&lt;h:panelGrid&gt;</p>
+<p>&lt;h:dataTable id=&quot;items&quot; border=&quot;3&quot; value=&quot;#{meuManagedBean.listaTimer}&quot; var=&quot;item&quot;&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Selecione&quot; /&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:selectBooleanCheckbox value=&quot;#{item.selecionado}&quot;  /&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column &gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Id&quot; /&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.id}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Proprietario&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.proprietario}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Mensagem&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.mensagem}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Data&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.data}&quot;&gt;</p>
+<p>&lt;f:convertDateTime timeZone=&quot;America/Sao_Paulo&quot; pattern=&quot;dd/MM/yyyy HH:mm&quot;/&gt;</p>
+<p>&lt;/h:outputText&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;/h:dataTable&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:panelGrid&gt;</p>
+<p>&lt;h:commandButton value=&quot;Selecionar para Exclusão&quot; action=&quot;#{meuManagedBean.getItemSelecionados}&quot;/&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:panelGrid&gt;</p>
+<p>&lt;h:outputText value=&quot;Mensagens para Apagar&quot;/&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:dataTable id=&quot;nova&quot; border=&quot;3&quot; value=&quot;#{meuManagedBean.messagenSelecionadas}&quot; var=&quot;item&quot;&gt;</p>
+<p>&lt;h:column &gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Id&quot; /&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.id}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Proprietario&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.proprietario}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Mensagem&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.mensagem}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;/h:dataTable&gt;</p>
+<p>&lt;h:commandButton value=&quot;Cadastrar Novo&quot; action=&quot;cadastro&quot;/&gt;</p>
+<p>&lt;h:commandButton value=&quot;Excluir&quot; action=&quot;#{meuManagedBean.exclui}&quot;/&gt;</p>
+<p>&lt;/h:form&gt;</p>
+<p>&lt;/h:body&gt;</p>
+<p>&lt;/html&gt;<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem 17</strong>. Versão Final MeuManagedBean.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda.beans;</p>
+<p>import br.com.agenda.MeuSessionBeanLocal;</p>
+<p>import br.com.agenda.modelo.Mensagem;</p>
+<p>import java.io.Serializable;</p>
+<p>import java.util.*;</p>
+<p>import javax.ejb.EJB;</p>
+<p>import javax.faces.bean.ManagedBean;</p>
+<p>import javax.faces.bean.SessionScoped;</p>
+<p>@ManagedBean</p>
+<p>@SessionScoped</p>
+<p>public class MeuManagedBean implements Serializable {</p>
+<p>@EJB</p>
+<p>MeuSessionBeanLocal ejb;</p>
+<p>private Integer inputId, inputDia, inputMes, inputAno, inputHora, inputMinuto;</p>
+<p>private String inputNome, inputMensagem;</p>
+<p>private Mensagem selecionado;</p>
+<p>List&lt;Mensagem&gt; listaTimer;</p>
+<p>private List&lt;Mensagem&gt; messagenSelecionadas;</p>
+<p>public String getItemSelecionados() {</p>
+<p>for (Mensagem msg : getListaTimer()) {</p>
+<p>if (msg.isSelecionado()) {</p>
+<p>if (!getMessagenSelecionadas().contains(msg)) {</p>
+<p>getMessagenSelecionadas().add(msg);</p>
+<p>}</p>
+<p>} else {</p>
+<p>if ((!(getMessagenSelecionadas() == null)) &amp;&amp; (!(getMessagenSelecionadas().isEmpty()))) {</p>
+<p>getMessagenSelecionadas().remove(msg);</p>
+<p>}</p>
+<p>}</p>
+<p>}</p>
+<p>return &quot;grade&quot;;</p>
+<p>}</p>
+<p>public String cadastra() {</p>
+<p>Calendar c = Calendar.getInstance();</p>
+<p>c.set(getInputAno(),getInputMes() - 1,getInputDia(),getInputHora(),getInputMinuto(), 00);</p>
+<p>Mensagem m = new Mensagem(getInputId(), getInputNome(), getInputMensagem(), c.getTime());</p>
+<p>ejb.processamento(m, c);</p>
+<p>setListaTimer(ejb.listaTimer());</p>
+<p>limparCampos();</p>
+<p>return &quot;grade&quot;;</p>
+<p>}</p>
+<p>public String grade() {</p>
+<p>setListaTimer(ejb.listaTimer());</p>
+<p>limparCampos();</p>
+<p>return &quot;grade&quot;;</p>
+<p>}</p>
+<p>public String exclui() {</p>
+<p>for (Mensagem m : getMessagenSelecionadas()) {</p>
+<p>ejb.removeTimer(m.getId());</p>
+<p>}</p>
+<p>setListaTimer(ejb.listaTimer());</p>
+<p>setMessagenSelecionadas(new ArrayList&lt;Mensagem&gt;());</p>
+<p>return &quot;grade&quot;;</p>
+<p>}</p>
+<p>public void limparCampos(){</p>
+<p>setInputAno(null); setInputDia(null);</p>
+<p>setInputId(null); setInputMes(null);</p>
+<p>setInputHora(null);setInputMinuto(null);</p>
+<p>setInputNome(null); setInputMensagem(null);</p>
+<p>}</p>
+<p>public List&lt;Mensagem&gt; getMessagenSelecionadas() {</p>
+<p>if (messagenSelecionadas == null) {</p>
+<p>messagenSelecionadas = new ArrayList&lt;Mensagem&gt;();</p>
+<p>}</p>
+<p>return messagenSelecionadas;</p>
+<p>}</p>
+<p>public void setMessagenSelecionadas(List&lt;Mensagem&gt; messagenSelecionadas) {</p>
+<p>this.messagenSelecionadas = messagenSelecionadas;</p>
+<p>}</p>
+<p>public List&lt;Mensagem&gt; getListaTimer() {</p>
+<p>if (listaTimer == null) {</p>
+<p>listaTimer = ejb.listaTimer();</p>
+<p>}</p>
+<p>return listaTimer;</p>
+<p>}</p>
+<p>public void setListaTimer(List&lt;Mensagem&gt; listaTimer) {</p>
+<p>this.listaTimer = listaTimer;</p>
+<p>}</p>
+<p>public Integer getInputAno() {</p>
+<p>return inputAno;</p>
+<p>}</p>
+<p>public void setInputAno(Integer inputAno) {</p>
+<p>this.inputAno = inputAno;</p>
+<p>}</p>
+<p>public Integer getInputDia() {</p>
+<p>return inputDia;</p>
+<p>}</p>
+<p>public void setInputDia(Integer inputDia) {</p>
+<p>this.inputDia = inputDia;</p>
+<p>}</p>
+<p>public Integer getInputHora() {</p>
+<p>return inputHora;</p>
+<p>}</p>
+<p>public void setInputHora(Integer inputHora) {</p>
+<p>this.inputHora = inputHora;</p>
+<p>}</p>
+<p>public Integer getInputId() {</p>
+<p>return inputId;</p>
+<p>}</p>
+<p>public void setInputId(Integer inputId) {</p>
+<p>this.inputId = inputId;</p>
+<p>}</p>
+<p>public String getInputMensagem() {</p>
+<p>return inputMensagem;</p>
+<p>}</p>
+<p>public void setInputMensagem(String inputMensagem) {</p>
+<p>this.inputMensagem = inputMensagem;</p>
+<p>}</p>
+<p>public Integer getInputMes() {</p>
+<p>return inputMes;</p>
+<p>}</p>
+<p>public void setInputMes(Integer inputMes) {</p>
+<p>this.inputMes = inputMes;</p>
+<p>}</p>
+<p>public Integer getInputMinuto() {</p>
+<p>return inputMinuto;</p>
+<p>}</p>
+<p>public void setInputMinuto(Integer inputMinuto) {</p>
+<p>this.inputMinuto = inputMinuto;</p>
+<p>}</p>
+<p>public String getInputNome() {</p>
+<p>return inputNome;</p>
+<p>}</p>
+<p>public void setInputNome(String inputNome) {</p>
+<p>this.inputNome = inputNome;</p>
+<p>}</p>
+<p>public Mensagem getSelecionado() {</p>
+<p>return selecionado;</p>
+<p>}</p>
+<p>public void setSelecionado(Mensagem selecionado) {</p>
+<p>this.selecionado = selecionado;</p>
+<p>}</p>
+<p>}<br />
+[/sourcecode]</p>
+</div>
+</div>
+<p>A <strong>figura 5</strong> demonstra a saída do sistema quando o timer é disparado, lembrando que este código poderia ser substituído pelo código real de envio de email por exemplo.</p>
+<p>[caption id="attachment_160" align="aligncenter" width="639" caption="saida"]<a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g5.jpg"><img class="size-full wp-image-160" title="saida" src="{{ site.baseurl }}/assets/g5.jpg" alt="saida" width="639" height="24" /></a>[/caption]</p>
+<p><strong>Figura 5</strong>.  Notificação no console de um Timer disparado</p>
+<p><span style="color:#0000ff;">Interface do sistema</span></p>
+<p>Consiste na tela de <em>login </em>(veja a <strong>Figura 6</strong>) onde o usuário se autentica digitando usuário e senha . Essa tela é composta de um formulário tem características especificas para poder utilizar o JAAS são elas: O action do formulário deve conter como destino <strong>j_security_check </strong>o nome do campo de usuario deve ser <strong>j_username</strong> e o de senha <strong>j_password.</strong></p>
+</div>
+<div>
+<p>[caption id="attachment_161" align="aligncenter" width="500" caption="login"]<a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g6.jpg"><img class="size-full wp-image-161" title="login" src="{{ site.baseurl }}/assets/g6.jpg" alt="login" width="500" height="81" /></a>[/caption]</p>
+<p><strong>Figura 6</strong>.  Tela de Login</p>
+<p>Na tela de <em>cadastro</em> temos a entrada de dados da Mensagem data e hora.A tela consistem em simples componentes de input com suas variáveis no <strong>MeuManagedBean</strong> ao clicar no botão <strong>grade</strong> o método <strong>grade()</strong> retorna o outcome<strong> “grade”</strong> é simplesmente o nome da pagina desejada sem a extensão xhtml, lembrando que a navegação implícita só esta disponível a partir no JSF 2.(veja a <strong>Figura 7</strong>).</p>
+<p>[caption id="attachment_162" align="aligncenter" width="500" caption="grade"]<a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g7.jpg"><img class="size-full wp-image-162" title="grade" src="{{ site.baseurl }}/assets/g7.jpg" alt="grade" width="500" height="220" /></a>[/caption]</p>
+<p><strong>Figura 7</strong>.  Tela de cadastro</p>
+<p>A tela de <em>grade.xhtml</em> que permite ao usuário gerenciar os agendamentos apresenta duas tabelas e três botões .Uma das tabelas mostra os timers agendados, obtidos do EJB através do <strong>MeuManagedBean</strong> que permite a seleção de mensagens para exclusão. Ao clicar no botão “<strong>selecionar para exclusão</strong>” é  chamado o método <strong>getItemSelecionados() </strong>do<strong> MeuManagedBean </strong>que analisa todas as mensagens da lista de mensagens que estão marcadas e adicionando-as em uma lista auxiliar que por fim são processadas pelo método <strong>exclui().</strong> Responsável por extrair o id dessas mensagens selecionadas, cancelar as tarefas no EJB e atualizar a lista de timers com dados atualizados (veja a <strong>Figura 8</strong>).</p>
+<p>[caption id="attachment_163" align="aligncenter" width="500" caption="grade com dados"]<a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g8.jpg"><img class="size-full wp-image-163" title="grade com dados" src="{{ site.baseurl }}/assets/g8.jpg" alt="grade com dados" width="500" height="263" /></a>[/caption]</p>
+<p><strong>Figura 8</strong>. Tela de grade</p>
+<p><span style="color:#0000ff;">Conclusão</span></p>
+<p>Implementamos nossa aplicação explorando os Stateless Session Beans , para prover nossos métodos  de negocio. Estudando seu ciclo de vida a aprendendo a usar seus métodos de callback. Conhecemos alguns recursos do Netbeans IDE que realmente não brinca em serviço, pois construímos uma aplicação JEE sem perder tempo correndo atrás de  jars, mostrando sua forte integração com o Glassfish. Este por sua vez robusto e ao mesmo tempo elegante com seu console de administração apresentando  as configurações de forma fácil e intuitiva. Configuramos a segurança utilizando um realm de dados e restringindo o acesso as paginas de nossa aplicação. Conhecemos os poderosos interceptadores e aplicamos com sucesso ao projeto realizando uma auditoria com uma boa quantidade de detalhes. Utilizando o Java Server Faces 2.0 nossas paginas tem a capacidade de interagir com o serviço de tempo agendando e cancelando tarefas. Estudamos como funciona e para que serve este importante recurso para as aplicações corporativas. Este artigo tem como objetivo mostrar na pratica o uso desses recursos, estes que são realmente muito importantes para que o desenvolvedor de sistemas corporativos aumente seu leque de ferramentas e busque aprimorar seus conhecimentos sobre JEE.</p>
+</div>
+</div>
+</div>
+</div>
+
+
+
+
+
+
+
+
+
+<p><span style="color:#0000ff;">Utilizando timer service</span></p>
+<p>Chegou a hora em que finalmente vamos agendar nossos serviços, primeiramente vamos modificar  MeuSessionBean novamente e injetar uma referencia ao timerService usando a anotação @Resource, modificaremos nosso método processamento() para que ele receba um objeto Calendar representando a data e hora e um objeto Mensagem que representa a mensagem que desejamos enviar, esse objeto deve ser criado no projeto EJB em um novo pacote <strong>br.com.agenda.modelo</strong> ver <strong>Listagem 12</strong> , dentro do método processamento()  iremos utilizar o método createTimer() do objeto timer que é uma referencia injetada do TimerService, ele tem dois parâmetros um objeto Date contendo data e hora de execução e um objeto Serializable que usaremos para identificar o timer.Temos que criar um método para ser executado quando o timer atingir a data e hora desejada vamos anotá-lo com @Timeout no nosso caso é o método tempo() que recebe um timer como parâmetro, nós utilizamos o método getInfo() para recuperar a mensagem agendada, em nosso exemplo imprimimos no console suas informações, este código poderia ser trocado por um trecho real de envio de email. No MeuSessionBean criamos outro método chamado listaTimer() que retorna uma lista de mensagens e utiliza mais um método do objeto timer o getTimers() que nos retorna todos os timers agendados então extraímos as mensagem destes timers e devolvemos em forma de um lista de Mensagens, para finalizar temos o método removeTimer() que baseado em um id cancela um timer especifico utilizando outro método do objeto timer, o cancel(). Vamos atualizar nosso código da interface local ver <strong>Listagem 13</strong>,e o código final do MeuSessionBean ver <strong>Listagem 14.</strong></p>
+<div>
+<p><strong>Listagem 12</strong>. Classe representando as mensagens. Mensagem.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda.modelo;</p>
+<p>import java.io.Serializable;</p>
+<p>import java.util.Date;</p>
+<p>public class Mensagem implements Serializable {</p>
+<p>private int id;</p>
+<p>private String proprietario;</p>
+<p>private String mensagem;</p>
+<p>private boolean selecionado;</p>
+<p>private Date data;</p>
+<p>public Mensagem(int id, String proprietario, String mensagem, Date data) {</p>
+<p>this.id = id;</p>
+<p>this.proprietario = proprietario;</p>
+<p>this.mensagem = mensagem;</p>
+<p>this.data = data;</p>
+<p>}</p>
+<p>public Date getData() {</p>
+<p>return data;</p>
+<p>}</p>
+<p>public void setData(Date data) {</p>
+<p>this.data = data;</p>
+<p>}</p>
+<p>public int getId() {</p>
+<p>return id;</p>
+<p>}</p>
+<p>public void setId(int id) {</p>
+<p>this.id = id;</p>
+<p>}</p>
+<p>public String getMensagem() {</p>
+<p>return mensagem;</p>
+<p>}</p>
+<p>public void setMensagem(String mensagem) {</p>
+<p>this.mensagem = mensagem;</p>
+<p>}</p>
+<p>public String getProprietario() {</p>
+<p>return proprietario;</p>
+<p>}</p>
+<p>public void setProprietario(String proprietario) {</p>
+<p>this.proprietario = proprietario;</p>
+<p>}</p>
+<p>public boolean isSelecionado() {</p>
+<p>return selecionado;</p>
+<p>}</p>
+<p>public void setSelecionado(boolean selecionado) {</p>
+<p>this.selecionado = selecionado;</p>
+<p>}</p>
+<p>@Override</p>
+<p>public boolean equals(Object obj) {</p>
+<p>if (obj == null) {</p>
+<p>return false;</p>
+<p>}</p>
+<p>if (getClass() != obj.getClass()) {</p>
+<p>return false;</p>
+<p>}</p>
+<p>final Mensagem other = (Mensagem) obj;</p>
+<p>if (this.id != other.id) {</p>
+<p>return false;</p>
+<p>}</p>
+<p>return true;</p>
+<p>}</p>
+<p>@Override</p>
+<p>public int hashCode() {</p>
+<p>int hash = 3;</p>
+<p>hash = 41 * hash + this.id;</p>
+<p>return hash;</p>
+<p>}</p>
+<p>}</p>
+<p>[/sourcecode]</p>
+<div>
+<p><strong>Listagem 13</strong>. Versao Final InterfaceLocal.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda;</p>
+<p>import javax.ejb.Local;</p>
+<p>@Local</p>
+<p>public interface MeuSessionBeanLocal {</p>
+<p>public void processamento(br.com.agenda.modelo.Mensagem msg, java.util.Calendar c);</p>
+<p>public java.util.List&lt;br.com.agenda.modelo.Mensagem&gt; listaTimer();</p>
+<p>public void removeTimer(int id);</p>
+<p>}<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem 14</strong>. Versão Final MeuSessionBean.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda;</p>
+<p>import br.com.agenda.modelo.Mensagem;</p>
+<p>import java.text.SimpleDateFormat;</p>
+<p>import java.util.*;</p>
+<p>import javax.annotation.*;</p>
+<p>import javax.ejb.*;</p>
+<p>import javax.ejb.Timer;</p>
+<p>import javax.interceptor.Interceptors;</p>
+<p>@Stateless</p>
+<p>@Interceptors({MeuInterceptador.class,MeuTemporizador.class})</p>
+<p>public class MeuSessionBean implements MeuSessionBeanLocal {</p>
+<p>@Resource</p>
+<p>private TimerService timer;</p>
+<p>private int processamentos;</p>
+<p>@PostConstruct</p>
+<p>private void inicio() {</p>
+<p>System.out.print(&quot;Criada uma nova instancia [ &quot; + this + &quot; ]&quot;);</p>
+<p>}</p>
+<p>@Timeout</p>
+<p>public void tempo(Timer timerObj) {</p>
+<p>System.out.print(&quot;timer executado&quot; + timerObj);</p>
+<p>Mensagem m = (Mensagem) timerObj.getInfo();</p>
+<p>SimpleDateFormat data = new SimpleDateFormat(&quot;dd/MM/yyyy HH:mm&quot;);</p>
+<p>System.out.print(&quot; A Mensagem de id :&quot; + m.getId() + &quot; pertencente a o proprietario: &quot; + m.getProprietario()</p>
+<p>+ &quot; foi enviada em: &quot; + data.format(m.getData()) + &quot; com o conteudo: &quot; + m.getMensagem());</p>
+<p>}</p>
+<p>public void processamento(Mensagem msg, Calendar c) {</p>
+<p>timer.createTimer(c.getTime(), msg);</p>
+<p>processamentos++;</p>
+<p>}</p>
+<p>public List&lt;Mensagem&gt; listaTimer() {</p>
+<p>List&lt;Mensagem&gt; listaMessagens = new ArrayList&lt;Mensagem&gt;();</p>
+<p>Collection&lt;Timer&gt; lista = timer.getTimers();</p>
+<p>for (Timer t : lista) {</p>
+<p>Mensagem m = ((Mensagem) t.getInfo());</p>
+<p>if (m != null) {</p>
+<p>listaMessagens.add(m);</p>
+<p>}</p>
+<p>}</p>
+<p>return listaMessagens;</p>
+<p>}</p>
+<p>public void removeTimer(int id) {</p>
+<p>Collection&lt;Timer&gt; lista = timer.getTimers();</p>
+<p>for (Timer t : lista) {</p>
+<p>Mensagem m = ((Mensagem) t.getInfo());</p>
+<p>if (m.getId() == id) {</p>
+<p>t.cancel();</p>
+<p>}</p>
+<p>}</p>
+<p>}</p>
+<p>@PreDestroy</p>
+<p>private void fim() {</p>
+<p>System.out.print(&quot; [ &quot; + this + &quot; ] realizou processamentos &quot; + processamentos);</p>
+<p>}</p>
+<p>}</p>
+<p>[/sourcecode]</p>
+<p><span style="color:#0000ff;">Criando a pagina que gerencia os agendamentos</span></p>
+<p>Em nosso projeto web AgendaMesagem-war temos que  atualizar o código da página de <em>cadastro</em> para que ele permita o usuário digitar os campos da mensagem,  assim como a  data e hora desejada de envio ver na <strong>Listagem 16</strong>. Esta pagina chama o método cadastra()  no MeuManagedBean que por sua vez chama o metodo de negocio negócio processamento() passando como parâmetro um objeto <strong>Calendar </strong>representando a data e hora desejada e um objeto <strong>Mensagem</strong> construído com os dados que o usuário digitou no formulário ver <strong>Listagem 15</strong>. Dentro do diretório <em>site</em> crie o arquivo <em>grade.xhtml, </em>esta pagina será  onde o usuário irá gerenciar os agendamentos, em uma tabela podemos visualizar os serviços agendados e cancelá-los convenientemente. Essa tela utiliza os métodos listaTimer() para preencher os dois componentes <strong>datatable</strong> que temos nesta pagina, um deles é onde visualizamos e podemos selecionar os timers para o cancelamento. O outro <strong>datatable</strong> exibe as mensagem selecionadas para exclusão  quando clicado no botão excluir o método exclui do MeuManagedBean que por sua extrai o <strong>id</strong> das mensagens e chama o método de negocio removeTimer() cancelando os timer selecionados ver <strong>Listagem 16</strong>. Temos que atualizar nosso MeuManagedBean com os novos métodos utilizados nas paginas de cadastro e de grade ver <strong>Listagem 17</strong> <strong>.</strong></p>
+<div>
+<p><strong>Listagem 15</strong>. Versão Final cadastro.xhtml</p>
+<p>[sourcecode language="html"]</p>
+<p>&lt;?xml version='1.0' encoding='UTF-8' ?&gt;</p>
+<p>&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd&quot;&gt;</p>
+<p>&lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot;</p>
+<p>xmlns:h=&quot;http://java.sun.com/jsf/html&quot;</p>
+<p>xmlns:f=&quot;http://java.sun.com/jsf/core&quot;</p>
+<p>xmlns:c=&quot;http://java.sun.com/jsp/jstl/core&quot;&gt;</p>
+<p>&lt;h:head&gt;</p>
+<p>&lt;title&gt;Cadastro&lt;/title&gt;</p>
+<p>&lt;/h:head&gt;</p>
+<p>&lt;h:body&gt;</p>
+<p>&lt;h:form id=&quot;cadastro&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Agendamento de Eventos&quot;/&gt;</p>
+<p>&lt;h:panelGrid&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;id &quot;/&gt;</p>
+<p>&lt;h:inputText value=&quot;#{meuManagedBean.inputId}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Nome &quot;/&gt;</p>
+<p>&lt;h:inputText value=&quot;#{meuManagedBean.inputNome}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Mensagem&quot;/&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:inputTextarea value=&quot;#{meuManagedBean.inputMensagem}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:messages/&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:panelGrid columns=&quot;5&quot;&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Dia &quot;/&gt;</p>
+<p>&lt;h:inputText size=&quot;5&quot; value=&quot;#{meuManagedBean.inputDia}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Mes &quot;/&gt;</p>
+<p>&lt;h:inputText  size=&quot;5&quot; value=&quot;#{meuManagedBean.inputMes}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Ano &quot;/&gt;</p>
+<p>&lt;h:inputText  size=&quot;5&quot; value=&quot;#{meuManagedBean.inputAno}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Hora &quot;/&gt;</p>
+<p>&lt;h:inputText  size=&quot;5&quot; value=&quot;#{meuManagedBean.inputHora}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;h:panelGroup&gt;</p>
+<p>&lt;h:outputText value=&quot;Minuto &quot;/&gt;</p>
+<p>&lt;h:inputText  size=&quot;5&quot; value=&quot;#{meuManagedBean.inputMinuto}&quot;  /&gt;</p>
+<p>&lt;/h:panelGroup&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:commandButton value=&quot;Agendar&quot;  action=&quot;#{meuManagedBean.cadastra}&quot;/&gt;</p>
+<p>&lt;h:commandButton value=&quot;Grade&quot;  action=&quot;#{meuManagedBean.grade}&quot;/&gt;</p>
+<p>&lt;/h:form&gt;</p>
+<p>&lt;/h:body&gt;</p>
+<p>&lt;/html&gt;<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem16</strong>. Página de gerência de agendamentos .grade.xhtml</p>
+<p>[sourcecode language="html"]</p>
+<p>&lt;?xml version='1.0' encoding='UTF-8' ?&gt;</p>
+<p>&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Transitional//EN&quot; &quot;http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd&quot;&gt;</p>
+<p>&lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot;</p>
+<p>xmlns:h=&quot;http://java.sun.com/jsf/html&quot;</p>
+<p>xmlns:f=&quot;http://java.sun.com/jsf/core&quot;</p>
+<p>xmlns:c=&quot;http://java.sun.com/jsp/jstl/core&quot;&gt;</p>
+<p>&lt;h:head&gt;&lt;title&gt;Grade&lt;/title&gt;&lt;/h:head&gt;</p>
+<p>&lt;h:body&gt;</p>
+<p>&lt;h:form id=&quot;grade&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Grade de Eventos&quot;/&gt;</p>
+<p>&lt;h:panelGrid&gt;</p>
+<p>&lt;h:dataTable id=&quot;items&quot; border=&quot;3&quot; value=&quot;#{meuManagedBean.listaTimer}&quot; var=&quot;item&quot;&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Selecione&quot; /&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:selectBooleanCheckbox value=&quot;#{item.selecionado}&quot;  /&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column &gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Id&quot; /&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.id}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Proprietario&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.proprietario}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Mensagem&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.mensagem}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Data&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.data}&quot;&gt;</p>
+<p>&lt;f:convertDateTime timeZone=&quot;America/Sao_Paulo&quot; pattern=&quot;dd/MM/yyyy HH:mm&quot;/&gt;</p>
+<p>&lt;/h:outputText&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;/h:dataTable&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:panelGrid&gt;</p>
+<p>&lt;h:commandButton value=&quot;Selecionar para Exclusão&quot; action=&quot;#{meuManagedBean.getItemSelecionados}&quot;/&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:panelGrid&gt;</p>
+<p>&lt;h:outputText value=&quot;Mensagens para Apagar&quot;/&gt;</p>
+<p>&lt;/h:panelGrid&gt;</p>
+<p>&lt;h:dataTable id=&quot;nova&quot; border=&quot;3&quot; value=&quot;#{meuManagedBean.messagenSelecionadas}&quot; var=&quot;item&quot;&gt;</p>
+<p>&lt;h:column &gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Id&quot; /&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.id}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Proprietario&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.proprietario}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;h:column&gt;</p>
+<p>&lt;f:facet name=&quot;header&quot;&gt;</p>
+<p>&lt;h:outputText value=&quot;Mensagem&quot;/&gt;</p>
+<p>&lt;/f:facet&gt;</p>
+<p>&lt;h:outputText value=&quot;#{item.mensagem}&quot;/&gt;</p>
+<p>&lt;/h:column&gt;</p>
+<p>&lt;/h:dataTable&gt;</p>
+<p>&lt;h:commandButton value=&quot;Cadastrar Novo&quot; action=&quot;cadastro&quot;/&gt;</p>
+<p>&lt;h:commandButton value=&quot;Excluir&quot; action=&quot;#{meuManagedBean.exclui}&quot;/&gt;</p>
+<p>&lt;/h:form&gt;</p>
+<p>&lt;/h:body&gt;</p>
+<p>&lt;/html&gt;<br />
+[/sourcecode]</p>
+<div>
+<p><strong>Listagem 17</strong>. Versão Final MeuManagedBean.java</p>
+<p>[sourcecode language="java"]</p>
+<p>package br.com.agenda.beans;</p>
+<p>import br.com.agenda.MeuSessionBeanLocal;</p>
+<p>import br.com.agenda.modelo.Mensagem;</p>
+<p>import java.io.Serializable;</p>
+<p>import java.util.*;</p>
+<p>import javax.ejb.EJB;</p>
+<p>import javax.faces.bean.ManagedBean;</p>
+<p>import javax.faces.bean.SessionScoped;</p>
+<p>@ManagedBean</p>
+<p>@SessionScoped</p>
+<p>public class MeuManagedBean implements Serializable {</p>
+<p>@EJB</p>
+<p>MeuSessionBeanLocal ejb;</p>
+<p>private Integer inputId, inputDia, inputMes, inputAno, inputHora, inputMinuto;</p>
+<p>private String inputNome, inputMensagem;</p>
+<p>private Mensagem selecionado;</p>
+<p>List&lt;Mensagem&gt; listaTimer;</p>
+<p>private List&lt;Mensagem&gt; messagenSelecionadas;</p>
+<p>public String getItemSelecionados() {</p>
+<p>for (Mensagem msg : getListaTimer()) {</p>
+<p>if (msg.isSelecionado()) {</p>
+<p>if (!getMessagenSelecionadas().contains(msg)) {</p>
+<p>getMessagenSelecionadas().add(msg);</p>
+<p>}</p>
+<p>} else {</p>
+<p>if ((!(getMessagenSelecionadas() == null)) &amp;&amp; (!(getMessagenSelecionadas().isEmpty()))) {</p>
+<p>getMessagenSelecionadas().remove(msg);</p>
+<p>}</p>
+<p>}</p>
+<p>}</p>
+<p>return &quot;grade&quot;;</p>
+<p>}</p>
+<p>public String cadastra() {</p>
+<p>Calendar c = Calendar.getInstance();</p>
+<p>c.set(getInputAno(),getInputMes() - 1,getInputDia(),getInputHora(),getInputMinuto(), 00);</p>
+<p>Mensagem m = new Mensagem(getInputId(), getInputNome(), getInputMensagem(), c.getTime());</p>
+<p>ejb.processamento(m, c);</p>
+<p>setListaTimer(ejb.listaTimer());</p>
+<p>limparCampos();</p>
+<p>return &quot;grade&quot;;</p>
+<p>}</p>
+<p>public String grade() {</p>
+<p>setListaTimer(ejb.listaTimer());</p>
+<p>limparCampos();</p>
+<p>return &quot;grade&quot;;</p>
+<p>}</p>
+<p>public String exclui() {</p>
+<p>for (Mensagem m : getMessagenSelecionadas()) {</p>
+<p>ejb.removeTimer(m.getId());</p>
+<p>}</p>
+<p>setListaTimer(ejb.listaTimer());</p>
+<p>setMessagenSelecionadas(new ArrayList&lt;Mensagem&gt;());</p>
+<p>return &quot;grade&quot;;</p>
+<p>}</p>
+<p>public void limparCampos(){</p>
+<p>setInputAno(null); setInputDia(null);</p>
+<p>setInputId(null); setInputMes(null);</p>
+<p>setInputHora(null);setInputMinuto(null);</p>
+<p>setInputNome(null); setInputMensagem(null);</p>
+<p>}</p>
+<p>public List&lt;Mensagem&gt; getMessagenSelecionadas() {</p>
+<p>if (messagenSelecionadas == null) {</p>
+<p>messagenSelecionadas = new ArrayList&lt;Mensagem&gt;();</p>
+<p>}</p>
+<p>return messagenSelecionadas;</p>
+<p>}</p>
+<p>public void setMessagenSelecionadas(List&lt;Mensagem&gt; messagenSelecionadas) {</p>
+<p>this.messagenSelecionadas = messagenSelecionadas;</p>
+<p>}</p>
+<p>public List&lt;Mensagem&gt; getListaTimer() {</p>
+<p>if (listaTimer == null) {</p>
+<p>listaTimer = ejb.listaTimer();</p>
+<p>}</p>
+<p>return listaTimer;</p>
+<p>}</p>
+<p>public void setListaTimer(List&lt;Mensagem&gt; listaTimer) {</p>
+<p>this.listaTimer = listaTimer;</p>
+<p>}</p>
+<p>public Integer getInputAno() {</p>
+<p>return inputAno;</p>
+<p>}</p>
+<p>public void setInputAno(Integer inputAno) {</p>
+<p>this.inputAno = inputAno;</p>
+<p>}</p>
+<p>public Integer getInputDia() {</p>
+<p>return inputDia;</p>
+<p>}</p>
+<p>public void setInputDia(Integer inputDia) {</p>
+<p>this.inputDia = inputDia;</p>
+<p>}</p>
+<p>public Integer getInputHora() {</p>
+<p>return inputHora;</p>
+<p>}</p>
+<p>public void setInputHora(Integer inputHora) {</p>
+<p>this.inputHora = inputHora;</p>
+<p>}</p>
+<p>public Integer getInputId() {</p>
+<p>return inputId;</p>
+<p>}</p>
+<p>public void setInputId(Integer inputId) {</p>
+<p>this.inputId = inputId;</p>
+<p>}</p>
+<p>public String getInputMensagem() {</p>
+<p>return inputMensagem;</p>
+<p>}</p>
+<p>public void setInputMensagem(String inputMensagem) {</p>
+<p>this.inputMensagem = inputMensagem;</p>
+<p>}</p>
+<p>public Integer getInputMes() {</p>
+<p>return inputMes;</p>
+<p>}</p>
+<p>public void setInputMes(Integer inputMes) {</p>
+<p>this.inputMes = inputMes;</p>
+<p>}</p>
+<p>public Integer getInputMinuto() {</p>
+<p>return inputMinuto;</p>
+<p>}</p>
+<p>public void setInputMinuto(Integer inputMinuto) {</p>
+<p>this.inputMinuto = inputMinuto;</p>
+<p>}</p>
+<p>public String getInputNome() {</p>
+<p>return inputNome;</p>
+<p>}</p>
+<p>public void setInputNome(String inputNome) {</p>
+<p>this.inputNome = inputNome;</p>
+<p>}</p>
+<p>public Mensagem getSelecionado() {</p>
+<p>return selecionado;</p>
+<p>}</p>
+<p>public void setSelecionado(Mensagem selecionado) {</p>
+<p>this.selecionado = selecionado;</p>
+<p>}</p>
+<p>}<br />
+[/sourcecode]</p>
+</div>
+</div>
+<p>A <strong>figura 5</strong> demonstra a saída do sistema quando o timer é disparado, lembrando que este código poderia ser substituído pelo código real de envio de email por exemplo.</p>
+<p>[caption id="attachment_160" align="aligncenter" width="639" caption="saida"]<a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g5.jpg"><img class="size-full wp-image-160" title="saida" src="{{ site.baseurl }}/assets/g5.jpg" alt="saida" width="639" height="24" /></a>[/caption]</p>
+<p><strong>Figura 5</strong>.  Notificação no console de um Timer disparado</p>
+<p><span style="color:#0000ff;">Interface do sistema</span></p>
+<p>Consiste na tela de <em>login </em>(veja a <strong>Figura 6</strong>) onde o usuário se autentica digitando usuário e senha . Essa tela é composta de um formulário tem características especificas para poder utilizar o JAAS são elas: O action do formulário deve conter como destino <strong>j_security_check </strong>o nome do campo de usuario deve ser <strong>j_username</strong> e o de senha <strong>j_password.</strong></p>
+</div>
+<div>
+<p>[caption id="attachment_161" align="aligncenter" width="500" caption="login"]<a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g6.jpg"><img class="size-full wp-image-161" title="login" src="{{ site.baseurl }}/assets/g6.jpg" alt="login" width="500" height="81" /></a>[/caption]</p>
+<p><strong>Figura 6</strong>.  Tela de Login</p>
+<p>Na tela de <em>cadastro</em> temos a entrada de dados da Mensagem data e hora.A tela consistem em simples componentes de input com suas variáveis no <strong>MeuManagedBean</strong> ao clicar no botão <strong>grade</strong> o método <strong>grade()</strong> retorna o outcome<strong> “grade”</strong> é simplesmente o nome da pagina desejada sem a extensão xhtml, lembrando que a navegação implícita só esta disponível a partir no JSF 2.(veja a <strong>Figura 7</strong>).</p>
+<p>[caption id="attachment_162" align="aligncenter" width="500" caption="grade"]<a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g7.jpg"><img class="size-full wp-image-162" title="grade" src="{{ site.baseurl }}/assets/g7.jpg" alt="grade" width="500" height="220" /></a>[/caption]</p>
+<p><strong>Figura 7</strong>.  Tela de cadastro</p>
+<p>A tela de <em>grade.xhtml</em> que permite ao usuário gerenciar os agendamentos apresenta duas tabelas e três botões .Uma das tabelas mostra os timers agendados, obtidos do EJB através do <strong>MeuManagedBean</strong> que permite a seleção de mensagens para exclusão. Ao clicar no botão “<strong>selecionar para exclusão</strong>” é  chamado o método <strong>getItemSelecionados() </strong>do<strong> MeuManagedBean </strong>que analisa todas as mensagens da lista de mensagens que estão marcadas e adicionando-as em uma lista auxiliar que por fim são processadas pelo método <strong>exclui().</strong> Responsável por extrair o id dessas mensagens selecionadas, cancelar as tarefas no EJB e atualizar a lista de timers com dados atualizados (veja a <strong>Figura 8</strong>).</p>
+<p>[caption id="attachment_163" align="aligncenter" width="500" caption="grade com dados"]<a href="http://brunodanielmarinho.files.wordpress.com/2010/12/g8.jpg"><img class="size-full wp-image-163" title="grade com dados" src="{{ site.baseurl }}/assets/g8.jpg" alt="grade com dados" width="500" height="263" /></a>[/caption]</p>
+<p><strong>Figura 8</strong>. Tela de grade</p>
+<p><span style="color:#0000ff;">Conclusão</span></p>
+<p>Implementamos nossa aplicação explorando os Stateless Session Beans , para prover nossos métodos  de negocio. Estudando seu ciclo de vida a aprendendo a usar seus métodos de callback. Conhecemos alguns recursos do Netbeans IDE que realmente não brinca em serviço, pois construímos uma aplicação JEE sem perder tempo correndo atrás de  jars, mostrando sua forte integração com o Glassfish. Este por sua vez robusto e ao mesmo tempo elegante com seu console de administração apresentando  as configurações de forma fácil e intuitiva. Configuramos a segurança utilizando um realm de dados e restringindo o acesso as paginas de nossa aplicação. Conhecemos os poderosos interceptadores e aplicamos com sucesso ao projeto realizando uma auditoria com uma boa quantidade de detalhes. Utilizando o Java Server Faces 2.0 nossas paginas tem a capacidade de interagir com o serviço de tempo agendando e cancelando tarefas. Estudamos como funciona e para que serve este importante recurso para as aplicações corporativas. Este artigo tem como objetivo mostrar na pratica o uso desses recursos, estes que são realmente muito importantes para que o desenvolvedor de sistemas corporativos aumente seu leque de ferramentas e busque aprimorar seus conhecimentos sobre JEE.</p>
+</div>
+</div>
+</div>
+</div>
+
+

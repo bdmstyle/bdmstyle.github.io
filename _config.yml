@@ -1,0 +1,25 @@
+# Dependencies
+markdown:         kramdown
+
+# Gems
+gems: [jekyll-paginate,jekyll-gist,jekyll-seo-tag,jekyll-sitemap]
+
+# Permalinks
+permalink:        pretty
+
+# Setup
+title:            Bruno Marinho
+tagline:          'Bruno Marinho'
+description:      'Tech Blog'
+
+author:
+  name:           'Bruno Marinho'
+  url:            https://twitter.com/marinhodev
+
+paginate:         100
+
+# Custom vars
+version:          2.1.0
+
+github:
+  repo:           https://bdmstyle.github.io
